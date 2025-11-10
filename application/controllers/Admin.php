@@ -3,82 +3,221 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 
 class Admin extends CI_Controller
 {
-	//<<---------------date_shamsi_ghamari---------------->>
-	function date_j($miladi_date){
-		//gregorian_to_jalali without time
-		$exploadeddate = explode(' ',$miladi_date);
-		$gmtdate = explode('-',$exploadeddate[0]);
-		$persiandate=$this->jalali_date->gregorian_to_jalali($gmtdate[0],$gmtdate[1],$gmtdate[2],'/');
-		return $persiandate;
+
+	//<<--------------- date_shamsi_ghamari ---------------->>
+	public function date_j($miladi_date)
+	{
+		if (empty($miladi_date)) return null;
+
+		$exploadeddate = explode(' ', $miladi_date);
+		$gmtdate = explode('-', $exploadeddate[0]);
+		return $this->jalali_date->gregorian_to_jalali($gmtdate[0], $gmtdate[1], $gmtdate[2], '/');
 	}
-	//<<---------------end date_shamsi_ghamari---------------->>
-
-    public function index()
-    {
-		$data['products']=$this->base_model->get_data('products','*');
-
-		if(isset($_SESSION['id'])){
-			$data['title']='داشبورد';
+	//<<--------------- end date_shamsi_ghamari ---------------->>
 
 
-			$query = $this->db->query("SELECT count(id_p) as count FROM shopping_cart_order 
-            GROUP BY year (date) ORDER BY date");
-			$data['click'] = json_encode(array_column($query->result(), 'count'),JSON_NUMERIC_CHECK);
-
-			$query = $this->db->query("SELECT count(id_p) as count FROM shopping_cart_order 
-            GROUP BY year (date) ORDER BY date");
-			$data['viewer'] = json_encode(array_column($query->result(), 'count'),JSON_NUMERIC_CHECK);
-
-
-
-
-
-		$this->load->view('admin/admin-panel',$data);
-
-
-
-
-		}else{
+	// 📊 صفحه‌ی اصلی ادمین (داشبورد)
+	public function index()
+	{
+		// بررسی لاگین بودن
+		if (!$this->session->userdata('id')) {
 			redirect('admin/login_page');
+			return;
 		}
 
-    }
+		$data['title'] = 'داشبورد';
+		$data['products'] = $this->base_model->get_data('products', '*');
 
+		// داده‌های نمودار (نمونه‌ی ساده)
+		$query1 = $this->db->query("SELECT COUNT(id_p) AS count FROM shopping_cart_order GROUP BY YEAR(date) ORDER BY date");
+		$data['click'] = json_encode(array_column($query1->result(), 'count'), JSON_NUMERIC_CHECK);
+
+		// (در صورت نیاز این رو با داده‌ی متفاوت جایگزین کن)
+		$query2 = $this->db->query("SELECT COUNT(id_p) AS count FROM shopping_cart_order GROUP BY YEAR(date) ORDER BY date");
+		$data['viewer'] = json_encode(array_column($query2->result(), 'count'), JSON_NUMERIC_CHECK);
+
+		$this->load->view('admin/admin-panel', $data);
+	}
+
+
+	// 🪪 صفحه‌ی ورود
 	public function login_page()
 	{
-		if(empty($_SESSION['id'])){
-			$data['title']='ورود';
-			$this->load->view('admin/layout/header2',$data);
-			$this->load->view('admin/login');
-		}else{
+		if ($this->session->userdata('id')) {
 			redirect('admin');
+			return;
 		}
+
+		$data['title'] = 'ورود';
+		$this->load->view('admin/layout/header2', $data);
+		$this->load->view('admin/login');
 	}
+
+
+	// 🔐 لاگین
 	public function login()
 	{
-		if ($_POST){
-			$user_name=$_POST['user_name'];
-			$password=$_POST['password'];
-			$admin =$this -> base_model -> get_data('admin','*',array('user_name'=>$user_name,'password'=>$password));
+		if ($this->input->post()) {
+			$username = $this->input->post('user_name', true);
+			$password = $this->input->post('password', true);
 
-			if(isset($admin[0])){
-				$id=$admin[0]->id;
-				$this->session->set_userdata('id',$id);
+			// در صورت نیاز رمز رو هش کن (در صورت plain-text ذخیره شده، این خط رو فعلاً کامنت بزار)
+			// $password = md5($password);
+
+			$admin = $this->base_model->get_data('admin', '*', [
+				'user_name' => $username,
+				'password'  => $password
+			]);
+
+			if (!empty($admin)) {
+				$this->session->set_userdata('id', $admin[0]->id);
 				redirect('admin');
-			}else{
-				$this->session->set_flashdata('err','msg');
+			} else {
+				$this->session->set_flashdata('err', 'نام کاربری یا رمز عبور اشتباه است.');
 				redirect('admin/login_page');
 			}
+		} else {
+			redirect('admin/login_page');
+		}
+	}
 
+
+	// 🚪 خروج از حساب
+	public function logout()
+	{
+		$this->session->sess_destroy();
+		redirect('admin/login_page');
+	}
+
+
+	public function users_list()
+	{
+		$columns = [
+			null,                   // برای checkbox یا دکمه‌ها
+			'role.name',
+			'profile.name',
+			'profile.family',
+			'register.phone_number',
+			'register.created',
+			'register.modified',
+			null, null, null, null
+		];
+
+		$join = [
+			'profile' => 'register.id = profile.user_id',
+			'role' => 'register.role = role.id'
+		];
+
+		$table = 'register';
+		$select = 'profile.id, profile.user_id, register.id as user_id, role.name as role, profile.name, profile.family, register.phone_number, register.created, register.modified, register.IsActive';
+
+		// دریافت داده‌ها با مدل جدید
+		$result = $this->base_model->datatable($table, $columns, $_POST, $select, $join, null, ['register.id' => 'DESC']);
+
+		$data = [];
+		foreach($result['data'] as $row) {
+			$sub_array = [];
+			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check" user_id="'.htmlspecialchars($row->user_id).'" id_prof="'.htmlspecialchars($row->id).'">';
+			$sub_array[] = htmlspecialchars($row->role);
+			$sub_array[] = htmlspecialchars($row->name);
+			$sub_array[] = htmlspecialchars($row->family);
+			$sub_array[] = htmlspecialchars($row->phone_number);
+			$sub_array[] = htmlspecialchars($row->created);
+			$sub_array[] = htmlspecialchars($row->modified);
+
+			$sub_array[] = ($row->IsActive == 0)
+				? '<button type="button" id="active" user_id="'.$row->user_id.'" id_prof="'.$row->id.'" class="btn btn-primary btn-xs">فعالسازی</button>'
+				: '<button type="button" id="deactive" user_id="'.$row->user_id.'" id_prof="'.$row->id.'" class="btn btn-secondry btn-xs">غیرفعالسازی</button>';
+
+			$sub_array[] = '<button type="button" id="reset" user_id="'.$row->user_id.'" id_prof="'.$row->id.'" class="btn btn-info"><i class="fa fa-key"></i></button>';
+			$sub_array[] = '<a href="'.base_url('admin/edit_user/'.$row->user_id).'"><button class="btn btn-warning"><i class="fa fa-edit"></i></button></a>';
+			$sub_array[] = '<button id="delete" user_id="'.$row->user_id.'" id_prof="'.$row->id.'" class="btn btn-danger"><i class="fa fa-trash"></i></button>';
+
+			$data[] = $sub_array;
 		}
 
-	}
-	public function logout(){
+		// خروجی JSON برای DataTables
+		$output = [
+			"draw" => intval($_POST["draw"]),
+			"recordsTotal" => $result['recordsTotal'],
+			"recordsFiltered" => $result['recordsFiltered'],
+			"data" => $data
+		];
 
-		$this->session->unset_userdata('id');
-		$this->session->sess_destroy();
-		redirect('admin');
+		echo json_encode($output);
 	}
+
+	public function delete_user()
+	{
+		if ($_POST && isset($_POST['user_ids']) && is_array($_POST['user_ids'])) {
+			$user_ids = $_POST['user_ids'];
+
+			// حذف گروهی از جدول profile و register
+			$this->base_model->delete_data('profile', null, ['user_id' => $user_ids]);
+			$this->base_model->delete_data('register', null, ['id' => $user_ids]);
+
+			echo 1;
+		}
+	}
+
+	public function toggle_user_status()
+	{
+		if ($_POST) {
+			$user_ids = [];
+
+			// گرفتن چند رکورد انتخاب‌شده
+			if (isset($_POST['user_ids']) && is_array($_POST['user_ids'])) {
+				$user_ids = $_POST['user_ids'];
+			}
+
+			// اگر فقط یک رکورد تکی ارسال شده
+			if (isset($_POST['user_id'])) {
+				$user_ids[] = $_POST['user_id'];
+			}
+
+			// بررسی اینکه حداقل یک آی‌دی وجود دارد
+			if (!empty($user_ids)) {
+				$status = isset($_POST['status']) ? intval($_POST['status']) : 1; // 1 = فعال، 0 = غیرفعال
+
+				foreach ($user_ids as $id) {
+					$this->base_model->update_data('register', ['IsActive' => $status], ['id' => $id]);
+				}
+
+				echo 1; // موفقیت
+			} else {
+				echo 0; // هیچ رکوردی برای تغییر وجود ندارد
+			}
+		} else {
+			echo 0; // درخواست POST نیست
+		}
+	}
+
+	public function reset_pass()
+	{
+		if ($_POST) {
+			$id = $_POST['id'];
+			$new_pass = $_POST['new_pass'];
+			$re_pass = $_POST['re_new_pass'];
+
+			if ($new_pass === $re_pass) {
+				// آپدیت پسورد با مدل جدید
+				$this->base_model->update_data('register', ['password' => $new_pass], ['id' => $id]);
+				echo 1; // موفق
+			} else {
+				echo 0; // رمزها مطابقت ندارند
+			}
+		} else {
+			echo 0; // درخواست POST نیست
+		}
+	}
+
+
+
+
+
+
+
+
 
 	public function category_test20()
 	{
@@ -4953,14 +5092,7 @@ class Admin extends CI_Controller
 		$this->load->view('admin/layout/sidebar');
 		$this->load->view('admin/registered-users');
 	}
-	public function delete_user()
-	{
-		if ($_POST) {
-			$user_id = $_POST['user_id'];
-			$this->base_model->delete_row('profile','user_id', $user_id);
-			$this->base_model->delete_row('register','id', $user_id);
-			echo 1;}
-	}
+
 	public function insert_user()
 	{
 		$data['profile']=$this->base_model->get_data('profile','*');
@@ -4974,21 +5106,7 @@ class Admin extends CI_Controller
 		$this->load->view('admin/layout/sidebar');
 		$this->load->view('admin/insert_user');
 	}
-	public function reset_pass()
-	{
 
-		$re_pass = $_POST['re_new_pass'];
-		$id = $_POST['id'];
-		$data['password'] = $_POST['new_pass'];
-
-		if($re_pass==$_POST['new_pass']){
-			$this->base_model->update('register', array('id' => $id), $data);
-			echo 1;
-		}else{
-			echo 0;
-		}
-
-	}
 	public function add_user(){
 		if ($_POST) {
 			$this->load->library('form_validation');
@@ -5069,40 +5187,7 @@ class Admin extends CI_Controller
 
 		}
 	}
-	function users_list()
-	{
-		$fetch_data = $this->base_model->users_make_datatables();
-		$data = array();
-		foreach($fetch_data as $row)
-		{
-			$sub_array = array();
-			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check" user_id="'.$row->user_id.'" id_prof="'.$row->id.'"></input> ';
-			$sub_array[] = $row->role;
-			$sub_array[] = $row->name;
-			$sub_array[] = $row->family;
-			$sub_array[] = $row->phone_number;
-			$sub_array[] = $row->created;
-			$sub_array[] = $row->modified;
-			if($row->IsActive==0) {$sub_array[] = '<button type="button" id="active" user_id="'.$row->user_id.'" id_prof="'.$row->id.'" class="btn btn-primary btn-xs">فعال</button>';}
-			else if($row->IsActive==1){$sub_array[] = '<button type="button" id="deactive" user_id="'.$row->user_id.'" id_prof="'.$row->id.'" class="btn btn-primary btn-xs">غیرفعال</button>';}
-			$sub_array[] = '
-			<button type="button" id="reset" user_id="'.$row->user_id.'" id_prof="'.$row->id.'" class="btn btn-info"><i class="fa fa-key"></i></button>
-			';
 
-			$sub_array[] = '<a href="'. ($row->user_id == '' ? "" : base_url('admin/edit_user/').$row->user_id ) .' ">
-                            <button style="outline: unset;" class="btn btn-warning"><i class="fa fa-edit"></i> </button></a>';
-			$sub_array[] = '<button style="outline: unset;" id="delete" user_id="'.$row->user_id.'" id_prof="'.$row->id.'" class="btn btn-danger"><i class="fa fa-trash"></i> </button>';
-
-			$data[] = $sub_array;
-		}
-		$output = array(
-			"draw"                    =>     intval($_POST["draw"]),
-			"recordsTotal"          =>      $this->base_model->users_get_all_data(),
-			"recordsFiltered"     =>     $this->base_model->users_get_filtered_data(),
-			"data"                    =>     $data
-		);
-		echo json_encode($output);
-	}
 
 	function users_list2()
 	{

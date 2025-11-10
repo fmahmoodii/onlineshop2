@@ -7,6 +7,7 @@ class base_model extends CI_Model
 		// Call the Model constructor
 		parent::__construct();
 	}
+
 	
 
 	public function get_data(
@@ -138,7 +139,7 @@ class base_model extends CI_Model
 	}
 
 
-
+	
 	public function delete_data($table, $where = NULL, $where_in = NULL)
 	{
 		if (empty($table)) {
@@ -168,6 +169,85 @@ class base_model extends CI_Model
 		}
 	}
 
+
+
+	public function datatable($table, $columns, $post_data, $select = '*', $join = NULL, $where = NULL, $order_by_default = NULL)
+	{
+		// ---- آماده‌سازی Query اصلی ----
+		$this->db->select($select);
+		$this->db->from($table);
+
+		// JOIN‌ها
+		if ($join != NULL && is_array($join)) {
+			foreach ($join as $tbl => $cond) {
+				if (is_array($cond)) {
+					$this->db->join($tbl, $cond[0], isset($cond[1]) ? $cond[1] : 'left');
+				} else {
+					$this->db->join($tbl, $cond, 'left');
+				}
+			}
+		}
+
+		// WHERE
+		if ($where != NULL) {
+			$this->db->where($where);
+		}
+
+		// ---- شمارش کل ----
+		$recordsTotal = $this->db->count_all_results('', false); // false = نگه داشتن Query برای ادامه
+
+		// ---- جستجو (Search) ----
+		if (isset($post_data['search']['value']) && $post_data['search']['value'] != '') {
+			$search_value = $post_data['search']['value'];
+			$this->db->group_start();
+			foreach ($columns as $col) {
+				if ($col !== null) {
+					$field = explode(' as ', $col);
+					$col_name = trim($field[0]);
+					$this->db->or_like($col_name, $search_value);
+				}
+			}
+			$this->db->group_end();
+		}
+
+		// ---- شمارش بعد از فیلتر ----
+		$recordsFiltered = $this->db->count_all_results('', false);
+
+		// ---- ORDER ----
+		if (isset($post_data['order'])) {
+			$col_index = $post_data['order'][0]['column'];
+			$dir = $post_data['order'][0]['dir'];
+			if (isset($columns[$col_index]) && $columns[$col_index] !== null) {
+				$field = explode(' as ', $columns[$col_index]);
+				$col_name = trim($field[0]);
+				$this->db->order_by($col_name, $dir);
+			}
+		} elseif ($order_by_default != NULL) {
+			if (is_array($order_by_default)) {
+				foreach ($order_by_default as $col => $dir) {
+					$this->db->order_by($col, $dir);
+				}
+			} else {
+				$this->db->order_by($order_by_default);
+			}
+		}
+
+		// ---- LIMIT ----
+		if (isset($post_data['length']) && $post_data['length'] != -1) {
+			$this->db->limit($post_data['length'], $post_data['start']);
+		}
+
+		// ---- دریافت داده ----
+		$query = $this->db->get();
+		$data = $query->result();
+
+		// ---- خروجی نهایی ----
+		return [
+			'recordsTotal' => $recordsTotal,
+			'recordsFiltered' => $recordsFiltered,
+			'data' => $data
+		];
+	}
 
 
 

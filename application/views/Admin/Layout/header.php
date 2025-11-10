@@ -42,6 +42,41 @@
 
 </head>
 <style>
+	/* پایه همه اسنکبارها */
+	.snackbar {
+		visibility: hidden; /* مخفی به صورت پیش‌فرض */
+		min-width: 250px;
+		margin-left: -125px; /* نصف عرض منفی برای وسط چین کردن */
+		background-color: #333;
+		color: #fff;
+		text-align: center;
+		border-radius: 2px;
+		padding: 16px;
+		position: fixed;
+		z-index: 1000;
+		left: 50%;
+		bottom: 30px;
+		font-size: 14px;
+	}
+
+	/* حالت نمایش */
+	.snackbar.show {
+		visibility: visible;
+		-webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+		animation: fadein 0.5s, fadeout 0.5s 2.5s;
+	}
+
+	/* رنگ‌های متفاوت بر اساس نوع */
+	#snackbar_del { background-color: #e74c3c; } /* قرمز برای حذف */
+	#snackbar_ins { background-color: #2ecc71; } /* سبز برای درج */
+	#snackbar_upd { background-color: #3498db; } /* آبی برای ویرایش */
+
+	/* انیمیشن‌ها */
+	@-webkit-keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+	@keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+	@-webkit-keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+	@keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+
 
 	button{
 		outline: none;
@@ -135,6 +170,8 @@
 		list-style:none;
 	}
 </style>
+
+
 <div class="container-fluid">
 	<div id="2" class="row" style=" height: 60px;
     background-color:#5478f6; padding: 20px ">

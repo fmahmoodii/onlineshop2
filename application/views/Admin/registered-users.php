@@ -1,60 +1,22 @@
 
-<style>/* The snackbar - position it at the bottom and in the middle of the screen */
-	#snackbar,#snackbar2 {
-		visibility: hidden; /* Hidden by default. Visible on click */
-		min-width: 250px; /* Set a default minimum width */
-		margin-left: -125px; /* Divide value of min-width by 2 */
-		background-color: #333; /* Black background color */
-		color: #fff; /* White text color */
-		text-align: center; /* Centered text */
-		border-radius: 2px; /* Rounded borders */
-		padding: 16px; /* Padding */
-		position: fixed; /* Sit on top of the screen */
-		z-index: 1; /* Add a z-index if needed */
-		left: 50%; /* Center the snackbar */
-		bottom: 30px; /* 30px from the bottom */
-	}
 
-	/* Show the snackbar when clicking on a button (class added with JavaScript) */
-	#snackbar.show,#snackbar2.show {
-		visibility: visible; /* Show the snackbar */
-		/* Add animation: Take 0.5 seconds to fade in and out the snackbar.
-		However, delay the fade out process for 2.5 seconds */
-		-webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
-		animation: fadein 0.5s, fadeout 0.5s 2.5s;
-	}
-
-	/* Animations to fade the snackbar in and out */
-	@-webkit-keyframes fadein {
-		from {bottom: 0; opacity: 0;}
-		to {bottom: 30px; opacity: 1;}
-	}
-
-	@keyframes fadein {
-		from {bottom: 0; opacity: 0;}
-		to {bottom: 30px; opacity: 1;}
-	}
-
-	@-webkit-keyframes fadeout {
-		from {bottom: 30px; opacity: 1;}
-		to {bottom: 0; opacity: 0;}
-	}
-
-	@keyframes fadeout {
-		from {bottom: 30px; opacity: 1;}
-		to {bottom: 0; opacity: 0;}
-	}
-</style>
 
 <?php if($this->session->userdata('id')){ ?>
 
 	<div class="container box" id="content" >
 <!--		<a href="--><?php //echo base_url('admin/edit_off_code/').$p->id.'/'.$p->code ?><!--">-->
-		<a href="<?php echo base_url('admin/insert_user') ?>">
-			<button class="btn btn-success" id="new_user"
-				style="outline: unset" >کاربر جدید
-			</button>
-		</a>
+
+		<div>
+			<a href="<?php echo base_url('admin/insert_user') ?>">
+				<button class="btn btn-success" id="new_user"
+						style="outline: unset" >کاربر جدید
+				</button>
+			</a>
+			<button id='delete_selected' class="btn btn-sm ml-3 btn-danger" style="outline: none" >حذف همه</button>
+			<button id='update_selected' class="btn btn-sm ml-3 btn-warning" >ویرایش همه</button>
+			<button id='active_selected' class="btn btn-sm ml-3 btn-primary" >فعال سازی همه</button>
+			<button id='deactive_selected' class="btn btn-sm ml-3 btn-secondry" >غیرفعال سازی همه</button>
+		</div>
 		<br>
 		<br>
 		<br>
@@ -64,10 +26,6 @@
 				<th>
 					<label for="checkbox">همه</label>
 					<input type="checkbox" id='check_all'>
-					<br>
-					<button id='delete_selected' class="btn btn-sm ml-3 btn-danger" >حذف</button>
-					<br>
-					<button id='update_selected' class="btn btn-sm ml-3 btn-warning" >ویرایش</button>
 				</th>
 				<th width="15%">نوع کاربر</th>
 				<th width="15%">نام</th>
@@ -83,8 +41,10 @@
 			</thead>
 		</table>
 
-		<div id="snackbar">حذف شد</div>
-		<div id="snackbar2">با موفقیت انجام شد</div>
+		<div id="snackbar_del" class="snackbar">حذف با موفقیت انجام شد</div>
+		<div id="snackbar_ins" class="snackbar">درج با موفقیت انجام شد</div>
+		<div id="snackbar_upd" class="snackbar">ویرایش با موفقیت انجام شد</div>
+
 	</div>
 
 	<div class="modal fade" id="reset_pass" role="dialog">
@@ -160,66 +120,100 @@
 		});
 	});
 
+	function showSnackbar(type) {
+		// type: 'del', 'ins', 'upd'
+		var id = 'snackbar_' + type;
+		var x = document.getElementById(id);
+		x.className = "snackbar show";
 
+		setTimeout(function() {
+			x.className = x.className.replace("show", "");
+		}, 3000);
+	}
+
+
+	// حذف تکی
 	$(document).on('click', '#delete', function(){
-		id=$(this).attr("id_prof");
-		user_id=$(this).attr("user_id");
-		var m = confirm('آیا از حذف محصول اطمینان دارید؟')
-		if (m == true) {
+		var user_id = $(this).attr("user_id");
+		if(confirm('آیا از حذف محصول اطمینان دارید؟')) {
 			$.ajax({
 				url:"<?php echo base_url(); ?>admin/delete_user",
 				method:"POST",
-				data:{'user_id':user_id,},
-				success:function(data)
-				{
-					$('#usr_data').DataTable().ajax.reload( null, false );
-
-					// Get the snackbar DIV
-					var x = document.getElementById("snackbar");
-
-					// Add the "show" class to DIV
-					x.className = "show";
-
-					// After 3 seconds, remove the show class from DIV
-					setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
-
-
+				data:{ user_ids: [user_id] }, // ارسال به صورت آرایه
+				success:function(){
+					$('#usr_data').DataTable().ajax.reload(null, false);
+					showSnackbar('del');
 				}
 			});
 		}
-		else
-		{
-			return false;
+	});
+
+	// حذف چندتایی (checkbox)
+	$("#delete_selected").on("click", function () {
+		var user_ids = [];
+		$("input:checkbox[name='row-check']:checked").each(function() {
+			user_ids.push($(this).attr("user_id"));
+		});
+
+		if(user_ids.length > 0) {
+			if(confirm('آیا از حذف محصولات انتخاب شده اطمینان دارید؟')) {
+				$.ajax({
+					type: "POST",
+					url:"<?php echo base_url(); ?>admin/delete_user",
+					data: { user_ids: user_ids }, // ارسال همان آرایه
+					success: function(){
+						$('#usr_data').DataTable().ajax.reload(null, false);
+						showSnackbar('del');
+					},
+					error: function(jqXHR, textStatus, errorThrown) {
+						$("#msg").html("<span style='color:red;'>" + textStatus + " " + errorThrown + "</span>");
+					}
+				});
+			}
+		} else {
+			$("#msg").html('<span style="color:red;">حداقل یک رکورد را برای حذف انتخاب کنید</span>');
 		}
 	});
 
+	$(document).on('click', '#active, #deactive', function(){
+		var user_id = $(this).attr('user_id');
+		var status = $(this).attr('id') === 'active' ? 1 : 0;
 
-	$(document).on('click', '#active', function (e) {
-		var id = $(this).attr("user_id");
-		var table = 'register';
-		$.post('<?php echo base_url()?>admin/row_active', {
-				'id': id,
-				'table': table,
-			},
-			function (data) {
-				if (data == 1) {
-					$('#usr_data').DataTable().ajax.reload( null, false );
+		$.ajax({
+			url: "<?= base_url('admin/toggle_user_status') ?>",
+			method: "POST",
+			data: { user_id: user_id, status: status },
+			success: function() {
+				$('#usr_data').DataTable().ajax.reload(null, false);
+				showSnackbar('upd'); // پیام فعال یا غیرفعال
+			}
+		});
+	});
+
+	$(document).on('click', '#active_selected, #deactive_selected', function(){
+		var user_ids = [];
+		$("input[name='row-check']:checked").each(function() {
+			user_ids.push($(this).attr('user_id'));
+		});
+
+		if(user_ids.length > 0){
+			// تعیین وضعیت بر اساس دکمه کلیک شده
+			var status = $(this).attr('id') === 'active_selected' ? 1 : 0;
+
+			$.ajax({
+				url: "<?= base_url('admin/toggle_user_status') ?>",
+				method: "POST",
+				data: { user_ids: user_ids, status: status },
+				success: function() {
+					$('#usr_data').DataTable().ajax.reload(null, false);
+					showSnackbar('upd'); // پیام گروهی
 				}
 			});
+		} else {
+			alert('حداقل یک رکورد انتخاب کنید.');
+		}
 	});
-	$(document).on('click', '#deactive', function (e) {
-		var id = $(this).attr("user_id");
-		var table = 'register';
-		$.post('<?php echo base_url()?>admin/row_deactive', {
-				'id': id,
-				'table': table,
-			},
-			function (data) {
-				if (data == 1) {
-					$('#usr_data').DataTable().ajax.reload( null, false );
-				}
-			});
-	});
+
 
 	//If check_all checked then check all table rows
 	$("#check_all").on("click", function () {
@@ -246,43 +240,6 @@
 		}
 	});
 
-	$("#delete_selected").on("click", function () {
-		var ids1 = '';
-		var ids2 = '';
-		var comma = '';
-		$("input:checkbox[name='row-check']:checked").each(function() {
-			ids1 = ids1 + comma + $(this).attr("user_id");
-			ids2 = ids2 + comma + $(this).attr("id_prof");
-			comma = ',';
-		});
-
-		if(ids1.length > 0) {
-			$.ajax({
-				type: "POST",
-				url:"<?php echo base_url(); ?>admin/delete_users_checked",
-				data: {'ids1': ids1,'ids2': ids2,},
-				dataType: "html",
-				cache: false,
-				success: function(msg) {
-					$("#msg").html(msg);
-					$('#usr_data').DataTable().ajax.reload( null, false );
-					// Get the snackbar DIV
-					var x = document.getElementById("snackbar");
-
-					// Add the "show" class to DIV
-					x.className = "show";
-
-					// After 3 seconds, remove the show class from DIV
-					setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
-				},
-				error: function(jqXHR, textStatus, errorThrown) {
-					$("#msg").html("<span style='color:red;'>" + textStatus + " " + errorThrown + "</span>");
-				}
-			});
-		} else {
-			$("#msg").html('<span style="color:red;">You must select at least one row for deletion</span>');
-		}
-	});
 
 
 	//------نمایش مودال---------
@@ -293,33 +250,27 @@
 	});
 	//---------عملیات ویرایش-----------
 	$(document).on('click', '#accept', function(e){
-		var id=$("#id_modal").val();
-		var new_pass=$("#new_pass_modal").val();
-		var re_new_pass=$("#re_new_pass_modal").val();
+		var id = $("#id_modal").val();
+		var new_pass = $("#new_pass_modal").val();
+		var re_new_pass = $("#re_new_pass_modal").val();
 
-		$.post('<?php echo base_url();?>admin/reset_pass',
-			{'id':id,'new_pass':new_pass , 're_new_pass':re_new_pass,},
+		$.post('<?= base_url("admin/reset_pass") ?>',
+			{ 'id': id, 'new_pass': new_pass, 're_new_pass': re_new_pass },
 			function (data) {
-				if (data==1){
+				if (data == 1){
 					$('#reset_pass').modal('toggle');
-					$("#new_pass_modal").val('');
-					$("#re_new_pass_modal").val('');
-					$('#usr_data').DataTable().ajax.reload( null, false );
-					// Get the snackbar DIV
-					var x = document.getElementById("snackbar2");
+					$("#new_pass_modal, #re_new_pass_modal").val('');
+					$('#usr_data').DataTable().ajax.reload(null, false);
 
-					// Add the "show" class to DIV
-					x.className = "show";
-
-					// After 3 seconds, remove the show class from DIV
-					setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
-				}
-				else {
-					alert('خطا');
+					// نمایش اسنکبار موفقیت
+					showSnackbar('upd', 'رمز با موفقیت بازنشانی شد');
+				} else {
+					showSnackbar('del', 'خطا در بازنشانی رمز');
 				}
 			}
 		);
 	});
+
 
 
 </script>

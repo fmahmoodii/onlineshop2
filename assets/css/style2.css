@@ -1,0 +1,10 @@
+
+.navigation{
+	position: fixed;
+	inset: 20px;
+	background: #5d5d5d;
+	width: 80px;
+	border-right:10px solid #5d5d5d;
+	border-radius: 50px;
+	box-shadow: -10px -3px 25px -3px #777676;
+}
