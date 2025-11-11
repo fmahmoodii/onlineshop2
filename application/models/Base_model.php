@@ -8,85 +8,71 @@ class base_model extends CI_Model
 		parent::__construct();
 	}
 
-	
 
-	public function get_data(
-    $table,
-    $select = '*',
-    $where = NULL,
-    $like = NULL,
-    $or_where = NULL,
-    $where_in = NULL,
-    $order_by = NULL,
-    $limit = NULL,
-    $offset = NULL,
-    $group_by = NULL,
-    $join = NULL,       // جدید
-    $return_type = 'object' // جدید
-) {
-    // انتخاب ستون‌ها
-    $this->db->select($select);
 
-    // JOINها
-    if ($join != NULL && is_array($join)) {
-        foreach ($join as $tbl => $cond) {
-            if (is_array($cond)) {
-                $this->db->join($tbl, $cond[0], isset($cond[1]) ? $cond[1] : 'left');
-            } else {
-                $this->db->join($tbl, $cond, 'left');
-            }
-        }
-    }
+	public function get_data($table, $select = '*', $where = NULL, $like = NULL, $or_where = NULL, $where_in = NULL, $order_by = NULL, $limit = NULL, $offset = NULL, $group_by = NULL, $join = NULL, $return_type = 'object') {
+		$this->db->select($select);
 
-    // WHERE شرط‌ها
-    if ($where != NULL) {
-        $this->db->where($where);
-    }
+		// JOIN
+		if (!empty($join) && is_array($join)) {
+			foreach ($join as $tbl => $cond) {
+				if (is_array($cond)) {
+					$this->db->join($tbl, $cond[0], $cond[1] ?? 'left');
+				} else {
+					$this->db->join($tbl, $cond, 'left');
+				}
+			}
+		}
 
-    // LIKE
-    if ($like != NULL) {
-        $this->db->like($like);
-    }
+		// WHERE
+		if (!empty($where)) {
+			$this->db->where($where);
+		}
 
-    // OR WHERE
-    if ($or_where != NULL) {
-        $this->db->or_where($or_where);
-    }
+		// LIKE
+		if (!empty($like)) {
+			$this->db->like($like);
+		}
 
-    // WHERE IN
-    if ($where_in != NULL && is_array($where_in)) {
-        foreach ($where_in as $col => $values) {
-            $this->db->where_in($col, $values);
-        }
-    }
+		// OR WHERE
+		if (!empty($or_where)) {
+			$this->db->or_where($or_where);
+		}
 
-    // GROUP BY
-    if ($group_by != NULL) {
-        $this->db->group_by($group_by);
-    }
+		// WHERE IN
+		if (!empty($where_in) && is_array($where_in)) {
+			foreach ($where_in as $col => $values) {
+				if (is_array($values) && count($values) > 0) {
+					// فقط مقادیر غیر آرایه‌ای داخل آرایه رو می‌پذیریم
+					$filtered_values = array_filter($values, fn($v) => !is_array($v));
+					if (!empty($filtered_values)) {
+						$this->db->where_in($col, $filtered_values);
+					}
+				}
+			}
+		}
 
-    // ORDER BY
-    if ($order_by != NULL) {
-        if (is_array($order_by)) {
-            foreach ($order_by as $col => $dir) {
-                $this->db->order_by($col, $dir);
-            }
-        } else {
-            $this->db->order_by($order_by);
-        }
-    }
+		// GROUP BY
+		if (!empty($group_by)) {
+			$this->db->group_by($group_by);
+		}
 
-    // اجرای کوئری
-    $query = $this->db->get($table, $limit, $offset);
+		// ORDER BY
+		if (!empty($order_by)) {
+			if (is_array($order_by)) {
+				foreach ($order_by as $col => $dir) {
+					$this->db->order_by($col, $dir);
+				}
+			} else {
+				$this->db->order_by($order_by);
+			}
+		}
 
-    // نوع خروجی: object یا array
-    if ($return_type == 'array') {
-        return $query->result_array();
-    } else {
-        return $query->result_object();
-    }
-}
+		// اجرای کوئری
+		$query = $this->db->get($table, $limit, $offset);
 
+		return $return_type === 'array' ? $query->result_array() : $query->result_object();
+	}
 
 
 	public function insert_data($table, $data, $batch = FALSE)
@@ -248,6 +234,34 @@ class base_model extends CI_Model
 			'data' => $data
 		];
 	}
+
+
+	public function add_log($entity_type, $entity_id, $action, $old_value = null, $new_value = null, $details = null, $group_id = null, $operation_info = null) {
+		$user_id = $this->session->userdata('id') ?? null;
+		$ip_address = $this->input->ip_address();
+
+		$data = [
+			'entity_type'    => $entity_type,
+			'entity_id'      => $entity_id,
+			'user_id'        => $user_id,
+			'action'         => $action,
+			'old_value'      => is_array($old_value) ? json_encode($old_value, JSON_UNESCAPED_UNICODE) : $old_value,
+			'new_value'      => is_array($new_value) ? json_encode($new_value, JSON_UNESCAPED_UNICODE) : $new_value,
+			'ip_address'     => $ip_address,
+			'timestamp'      => date('Y-m-d H:i:s'),
+			'group_id'       => $group_id,
+			'details'        => $details,
+			'operation_info' => $operation_info
+		];
+
+		try {
+			return $this->db->insert('logs', $data);
+		} catch (Exception $e) {
+			log_message('error', 'Add Log Error: ' . $e->getMessage());
+			return false;
+		}
+	}
+
 
 
 

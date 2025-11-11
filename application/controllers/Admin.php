@@ -3,6 +3,12 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 
 class Admin extends CI_Controller
 {
+	public function __construct()
+	{
+		parent::__construct();
+		$this->load->model('base_model');
+		$this->load->library('jalali_date'); // اجباری برای اطمینان از لود صحیح
+	}
 
 	//<<--------------- date_shamsi_ghamari ---------------->>
 	public function date_j($miladi_date)
@@ -39,7 +45,6 @@ class Admin extends CI_Controller
 		$this->load->view('admin/admin-panel', $data);
 	}
 
-
 	// 🪪 صفحه‌ی ورود
 	public function login_page()
 	{
@@ -53,7 +58,6 @@ class Admin extends CI_Controller
 		$this->load->view('admin/login');
 	}
 
-
 	// 🔐 لاگین
 	public function login()
 	{
@@ -61,18 +65,41 @@ class Admin extends CI_Controller
 			$username = $this->input->post('user_name', true);
 			$password = $this->input->post('password', true);
 
-			// در صورت نیاز رمز رو هش کن (در صورت plain-text ذخیره شده، این خط رو فعلاً کامنت بزار)
-			// $password = md5($password);
-
 			$admin = $this->base_model->get_data('admin', '*', [
 				'user_name' => $username,
 				'password'  => $password
 			]);
 
+			$group_id = uniqid('grp_', true);
+			$operationInfo = "تلاش ورود ادمین";
+
 			if (!empty($admin)) {
 				$this->session->set_userdata('id', $admin[0]->id);
+
+				$this->base_model->add_log(
+					'admin',
+					$admin[0]->id,
+					'login_success',
+					null,
+					null,
+					'ورود موفق به پنل ادمین با نام کاربری: ' . $username,
+					$group_id,
+					$operationInfo
+				);
+
 				redirect('admin');
 			} else {
+				$this->base_model->add_log(
+					'admin',
+					null,
+					'login_failed',
+					null,
+					null,
+					'تلاش ناموفق برای ورود به پنل ادمین با نام کاربری: ' . $username,
+					$group_id,
+					$operationInfo
+				);
+
 				$this->session->set_flashdata('err', 'نام کاربری یا رمز عبور اشتباه است.');
 				redirect('admin/login_page');
 			}
@@ -81,14 +108,46 @@ class Admin extends CI_Controller
 		}
 	}
 
-
 	// 🚪 خروج از حساب
 	public function logout()
 	{
+		$user_id = $this->session->userdata('id') ?? null;
+
+		if ($user_id) {
+			// گرفتن یوزرنیم
+			$admin = $this->base_model->get_data('admin', 'user_name', ['id' => $user_id]);
+			$username = isset($admin[0]) ? $admin[0]->user_name : null;
+
+			$group_id = uniqid('grp_', true);
+
+			$this->base_model->add_log(
+				'admin',                        // entity_type
+				$user_id,                        // entity_id
+				'logout',                        // action
+				null,                             // old_value
+				null,                             // new_value
+				"خروج موفق از پنل ادمین با نام کاربری: $username", // details
+				$group_id,                        // group_id
+				'خروج ادمین',                     // operation_info
+				null,
+				null,
+				null
+			);
+		}
+
 		$this->session->sess_destroy();
 		redirect('admin/login_page');
 	}
 
+
+	public function registered_users(){
+		$data['profile']=$this->base_model->get_data('profile','*');
+		$data['register']=$this->base_model->get_data('register','*');
+		$data['title']='کاربران';
+		$this->load->view('admin/layout/header',$data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/registered-users');
+	}
 
 	public function users_list()
 	{
@@ -151,10 +210,36 @@ class Admin extends CI_Controller
 	{
 		if ($_POST && isset($_POST['user_ids']) && is_array($_POST['user_ids'])) {
 			$user_ids = $_POST['user_ids'];
+			$group_id = uniqid('grp_', true);
+			$operationInfo = "حذف کاربران";
+
+			// گرفتن اطلاعات کاربران قبل از حذف برای لاگ
+			$users = $this->base_model->get_data(
+				'register',
+				'*',
+				null,
+				null,
+				null,
+				['id' => $user_ids] // استفاده از where_in صحیح
+			);
 
 			// حذف گروهی از جدول profile و register
-			$this->base_model->delete_data('profile', null, ['user_id' => $user_ids]);
-			$this->base_model->delete_data('register', null, ['id' => $user_ids]);
+			$this->db->where_in('user_id', $user_ids)->delete('profile');
+			$this->db->where_in('id', $user_ids)->delete('register');
+
+			// ثبت لاگ برای هر کاربر
+			foreach ($users as $user) {
+				$this->base_model->add_log(
+					'user',                 // entity_type
+					$user->id,              // entity_id
+					'delete',               // action
+					(array)$user,           // old_value
+					null,                   // new_value
+					'حذف کاربر با نام کاربری: ' . $user->user_name, // details
+					$group_id,              // group_id
+					$operationInfo          // operation_info
+				);
+			}
 
 			echo 1;
 		}
@@ -162,25 +247,53 @@ class Admin extends CI_Controller
 
 	public function toggle_user_status()
 	{
-		if ($_POST) {
+		if ($this->input->post()) {
 			$user_ids = [];
 
 			// گرفتن چند رکورد انتخاب‌شده
-			if (isset($_POST['user_ids']) && is_array($_POST['user_ids'])) {
-				$user_ids = $_POST['user_ids'];
+			if ($this->input->post('user_ids') && is_array($this->input->post('user_ids'))) {
+				$user_ids = $this->input->post('user_ids');
 			}
 
 			// اگر فقط یک رکورد تکی ارسال شده
-			if (isset($_POST['user_id'])) {
-				$user_ids[] = $_POST['user_id'];
+			if ($this->input->post('user_id')) {
+				$user_ids[] = $this->input->post('user_id');
 			}
 
 			// بررسی اینکه حداقل یک آی‌دی وجود دارد
 			if (!empty($user_ids)) {
 				$status = isset($_POST['status']) ? intval($_POST['status']) : 1; // 1 = فعال، 0 = غیرفعال
 
-				foreach ($user_ids as $id) {
-					$this->base_model->update_data('register', ['IsActive' => $status], ['id' => $id]);
+				$group_id = uniqid('grp_', true);
+				$operationInfo = "تغییر وضعیت کاربران";
+
+				// گرفتن اطلاعات قبلی کاربران
+				$users_before = $this->base_model->get_data('register', '*', NULL, NULL, NULL, ['id' => $user_ids]);
+
+				foreach ($users_before as $user) {
+					$old_value = (array) $user;
+
+					// آپدیت وضعیت در جدول register
+					$this->base_model->update_data('register', ['IsActive' => $status], ['id' => $user->id]);
+
+					// گرفتن اطلاعات جدید بعد از آپدیت
+					$user_after = $this->base_model->get_data('register', '*', ['id' => $user->id]);
+					$new_value = isset($user_after[0]) ? (array) $user_after[0] : [];
+
+					// ساخت متن لاگ
+					$details = ($status ? 'فعال‌سازی' : 'غیرفعال‌سازی') . ' کاربر با شماره موبایل: ' . $user->phone_number;
+
+					// ثبت لاگ
+					$this->base_model->add_log(
+						'register',       // entity_type
+						$user->id,        // entity_id
+						'update_status',  // action
+						$old_value,       // old_value
+						$new_value,       // new_value
+						$details,         // details
+						$group_id,        // group_id
+						$operationInfo    // operation_info
+					);
 				}
 
 				echo 1; // موفقیت
@@ -200,8 +313,42 @@ class Admin extends CI_Controller
 			$re_pass = $_POST['re_new_pass'];
 
 			if ($new_pass === $re_pass) {
-				// آپدیت پسورد با مدل جدید
-				$this->base_model->update_data('register', ['password' => $new_pass], ['id' => $id]);
+				// گرفتن اطلاعات قبلی کاربر
+				$user_before = $this->base_model->get_data('register', '*', ['id' => $id]);
+				if (!$user_before || !isset($user_before[0])) {
+					echo 0; // کاربر پیدا نشد
+					return;
+				}
+
+				$user_before = (array) $user_before[0]; // برای ذخیره در old_value
+				$old_value = $user_before;
+
+				// هش کردن رمز جدید
+				$hashed_pass = password_hash($new_pass, PASSWORD_BCRYPT);
+
+				// آپدیت رمز در جدول register
+				$this->base_model->update_data('register', ['password' => $hashed_pass], ['id' => $id]);
+
+				// گرفتن اطلاعات جدید بعد از آپدیت
+				$user_after = $this->base_model->get_data('register', '*', ['id' => $id]);
+				$user_after = isset($user_after[0]) ? (array) $user_after[0] : [];
+
+				// آماده‌سازی داده‌های لاگ
+				$group_id = uniqid('grp_', true);
+				$operationInfo = "تغییر رمز عبور کاربر";
+
+				// ثبت لاگ
+				$this->base_model->add_log(
+					'register',                         // entity_type
+					$id,                                // entity_id
+					'update_password',                  // action
+					$old_value,                         // old_value = اطلاعات قبلی کامل
+					$user_after,                        // new_value = اطلاعات جدید کامل
+					'تغییر رمز عبور برای کاربر با شماره موبایل: ' . $user_before['phone_number'], // details
+					$group_id,                          // group_id
+					$operationInfo                      // operation_info
+				);
+
 				echo 1; // موفق
 			} else {
 				echo 0; // رمزها مطابقت ندارند
@@ -210,6 +357,131 @@ class Admin extends CI_Controller
 			echo 0; // درخواست POST نیست
 		}
 	}
+
+	public function insert_user()
+	{
+		$data['profile']=$this->base_model->get_data('profile','*');
+		$data['register']=$this->base_model->get_data('register','*');
+		$data['role']=$this->base_model->get_data('role','*');
+		$data['province']=$this->base_model->get_data('province','*');
+		$data['city']=$this->base_model->get_data('city','*');
+
+		$data['title']='افزودن کاربر';
+		$this->load->view('admin/layout/header',$data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/insert_user');
+	}
+
+	public function add_user()
+	{
+		if ($this->input->post()) {
+			$this->load->library('form_validation');
+			$this->load->helper('form');
+
+			$phone_number = $this->input->post('phone_number', true);
+
+			// پیام‌ها و قوانین ولیدیشن
+			$this->form_validation->set_message('required', 'فیلد الزامی است');
+			$this->form_validation->set_message('min_length', '%s باید حداقل %d کاراکتر داشته باشد');
+			$this->form_validation->set_message('max_length', '%s باید حداکثر %d کاراکتر داشته باشد');
+			$this->form_validation->set_message('regex_match', 'فقط از حروف استفاده کنید');
+			$this->form_validation->set_message('_phoneRegex', 'شماره وارد شده نادرست است');
+
+			$this->form_validation->set_rules('role', 'نوع کاربر', 'required');
+			$this->form_validation->set_rules('password', 'رمز عبور', 'required|min_length[8]|max_length[25]');
+			$this->form_validation->set_rules('phone_number', 'شماره موبایل', 'required|min_length[10]|max_length[11]|callback__phoneRegex');
+
+			if ($this->form_validation->run()) {
+
+				$group_id = uniqid('grp_', true);
+				$operationInfo = "افزودن کاربر جدید";
+
+				// بررسی وجود کاربر قبلی
+				$existing_user = $this->base_model->get_data('register', '*', ['phone_number' => $phone_number]);
+				if (!empty($existing_user)) {
+					$this->base_model->add_log(
+						'user',
+						$existing_user[0]->id,
+						'add_user_failed',
+						null,
+						null,
+						'تلاش ناموفق برای افزودن کاربر با شماره موبایل: ' . $phone_number,
+						$group_id,
+						$operationInfo
+					);
+
+					$this->session->set_flashdata('err', 'کاربری با این شماره موبایل وجود دارد.');
+					redirect('admin/insert_user');
+					return;
+				}
+
+				// داده‌های جدول register
+				$data_register = [
+					'created' => $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s'),
+					'role' => $this->input->post('role', true),
+					'phone_number' => $phone_number,
+					'password' => $this->input->post('password', true)
+				];
+
+				// درج داده با insert_data
+				$user_id = $this->base_model->insert_data('register', $data_register);
+
+				// داده‌های جدول profile
+				$data_profile = [
+					'user_id' => $user_id,
+					'created' => $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s'),
+					'name' => $this->input->post('name', true),
+					'family' => $this->input->post('family', true),
+					'phone_number' => $phone_number,
+					'reciever_phone_number' => $this->input->post('phone_number1', true),
+					'ostan' => $this->input->post('ostan', true),
+					'city' => $this->input->post('city', true),
+					'address' => $this->input->post('address', true),
+					'postal_code' => $this->input->post('postal_code', true)
+				];
+
+				$this->base_model->insert_data('profile', $data_profile);
+
+				// ثبت لاگ برای جدول register
+				$this->base_model->add_log(
+					'register',
+					$user_id,
+					'add_user_success',
+					null,
+					(array)$data_register,
+					'افزودن کاربر جدید با شماره موبایل: ' . $phone_number,
+					$group_id,
+					$operationInfo
+				);
+
+				// ثبت لاگ برای جدول profile
+				$this->base_model->add_log(
+					'profile',
+					$user_id,
+					'add_user_success',
+					null,
+					(array)$data_profile,
+					'افزودن کاربر جدید با شماره موبایل: ' . $phone_number,
+					$group_id,
+					$operationInfo
+				);
+
+				redirect('admin/insert_user');
+
+			} else {
+				$this->insert_user();
+			}
+		}
+	}
+
+	public function _phoneRegex($phone_number1){
+		if (preg_match('/^(\+98|0)?9\d{9}$/', $phone_number1)){
+			return true;
+		}else{
+			return false;
+		}
+	}
+
 
 
 
@@ -5084,109 +5356,7 @@ class Admin extends CI_Controller
 		}
 	}
 
-	public function registered_users(){
-		$data['profile']=$this->base_model->get_data('profile','*');
-		$data['register']=$this->base_model->get_data('register','*');
-		$data['title']='کاربران';
-		$this->load->view('admin/layout/header',$data);
-		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/registered-users');
-	}
 
-	public function insert_user()
-	{
-		$data['profile']=$this->base_model->get_data('profile','*');
-		$data['register']=$this->base_model->get_data('register','*');
-		$data['role']=$this->base_model->get_data('role','*');
-		$data['province']=$this->base_model->get_data('province','*');
-		$data['city']=$this->base_model->get_data('city','*');
-
-		$data['title']='افزودن کاربر';
-		$this->load->view('admin/layout/header',$data);
-		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/insert_user');
-	}
-
-	public function add_user(){
-		if ($_POST) {
-			$this->load->library('form_validation');
-			$this->load->helper('form');
-
-			date_default_timezone_set("Asia/Tehran");
-			$data2['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-			$data2['role'] = $_POST['role'];
-			$data2['phone_number'] = $_POST['phone_number'];
-			$phone_number = $_POST['phone_number'];
-			$data2['password'] = $_POST['password'];
-			$register = $this->base_model->get_data('register','*',array('phone_number'=>$phone_number));
-			if (isset($register[0])){
-				$data['user_id'] = $register[0]->id;
-			}
-//			foreach ($register as $reg){
-//				$data['user_id'] = $reg->id;
-//			}
-			$data['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-			$data['name'] = $_POST['name'];
-			$data['family'] = $_POST['family'];
-			$data['phone_number'] = $_POST['phone_number'];
-			$data['reciever_phone_number'] = $_POST['phone_number1'];
-			$data['ostan'] = $_POST['ostan'];
-			$data['city'] = $_POST['city'];
-			$data['address'] = $_POST['address'];
-			$data['postal_code'] = $_POST['postal_code'];
-
-
-
-			$this->form_validation->set_message('required', 'فیلد الزامی');
-			$this->form_validation->set_message('min_length', '%s باید حداقل %d کاراکتر داشته باشد');
-			$this->form_validation->set_message('max_length', '%s باید حداکثر %d کاراکتر داشته باشد');
-			$this->form_validation->set_message('regex_match', 'فقط از حروف استفاده کنید');
-			$this->form_validation->set_message('_phoneRegex', 'شماره وارد شده نادرست است');
-
-			$this->form_validation->set_rules('role', 'نوع کاربر', 'required');
-			$this->form_validation->set_rules('password', 'رمز عبور', 'required|min_length[8]|max_length[25]');
-			$this->form_validation->set_rules('phone_number', 'شماره موبایل', 'required|min_length[10]|max_length[11]|callback__phoneRegex');
-
-			if ($this->form_validation->run()) {
-				if ($_POST) {
-
-					date_default_timezone_set("Asia/Tehran");
-					$data2['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-					$data2['role'] = $_POST['role'];
-					$data2['phone_number'] = $_POST['phone_number'];
-					$phone_number = $_POST['phone_number'];
-					$data2['password'] = $_POST['password'];
-
-					$this->base_model->insert('register', $data2);
-
-					$register=$this->base_model->get_data('register','*',array('phone_number'=>$phone_number));
-					if (isset($register[0])){
-						$data['user_id'] = $register[0]->id;
-					}
-//					foreach ($register as $reg){
-//						$data['user_id'] = $reg->id;
-//					}
-					$data['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-					$data['name'] = $_POST['name'];
-					$data['family'] = $_POST['family'];
-					$data['phone_number'] = $_POST['phone_number'];
-					$data['reciever_phone_number'] = $_POST['phone_number1'];
-					$data['ostan'] = $_POST['ostan'];
-					$data['city'] = $_POST['city'];
-					$data['address'] = $_POST['address'];
-					$data['postal_code'] = $_POST['postal_code'];
-
-					$this->base_model->insert('profile', $data);
-
-					redirect('admin/insert_user');
-
-				}
-			} else {
-				$this->insert_user();
-			}
-
-		}
-	}
 
 
 	function users_list2()
@@ -5313,13 +5483,7 @@ class Admin extends CI_Controller
 
 		}
 	}
-	public function _phoneRegex($phone_number1){
-		if (preg_match('/^(\+98|0)?9\d{9}$/', $phone_number1)){
-			return true;
-		}else{
-			return false;
-		}
-	}
+
 
 	public function get_city(){
 		$province_id=$this->input->post('province_id');
