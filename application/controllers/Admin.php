@@ -358,6 +358,48 @@ class Admin extends CI_Controller
 		}
 	}
 
+	public function _phoneRegex($phone_number1){
+		if (preg_match('/^(\+98|0)?9\d{9}$/', $phone_number1)){
+			return true;
+		}else{
+			return false;
+		}
+	}
+	public function get_city(){
+		$province_id=$this->input->post('province_id');
+		$city=$this->base_model->get_data('city','*',array('province_id'=>$province_id));
+		$result='<option value="">انتخاب کنید</option>';
+		foreach($city as $row){
+			$result=$result."<option value='$row->id'>$row->name</option>";
+		}
+		echo $result;
+	}
+	function search_ostan()
+	{
+		$output = '';
+		$query = '';
+		if($this->input->post('query'))
+		{
+			$query = $this->input->post('query');
+		}
+
+		$data = $this->base_model->search_ostan($query);
+
+
+		if($data->num_rows() > 0)
+		{
+			foreach($data->result() as $row)
+			{
+				$output .= ' <a
+				class="prov_tag" id="prov_tag_'.$row->id.'" id_prov="'.$row->id.'" style="display: block;">'.$row->name.'</a> ';
+
+			}
+		} else {
+			$output = 0;
+		}
+		echo $output;
+	}
+
 	public function insert_user()
 	{
 		$data['profile']=$this->base_model->get_data('profile','*');
@@ -474,13 +516,167 @@ class Admin extends CI_Controller
 		}
 	}
 
-	public function _phoneRegex($phone_number1){
-		if (preg_match('/^(\+98|0)?9\d{9}$/', $phone_number1)){
-			return true;
-		}else{
-			return false;
+	public function edit_user($id)
+	{
+		$data['title']='ویرایش کاربر';
+		$data['profile']=$this->base_model->get_data('profile','*',array('user_id'=>$id));
+		$data['role']=$this->base_model->get_data('role','*');
+		$data['province']=$this->base_model->get_data('province','*');
+		$data['city']=$this->base_model->get_data('city','*');
+		$data['register']=$this->base_model-> get_data('register','*',array('id'=>$id));
+
+
+		$this->load->view('admin/layout/header',$data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/edit-user');
+	}
+
+	public function edit_u($id) {
+		if ($_POST) {
+
+			$this->load->library('form_validation');
+			$this->load->helper('form');
+
+			// تعریف داده‌های ارسالی
+			$input_profile = [
+				'name' => $_POST['name'],
+				'family' => $_POST['family'],
+				'reciever_phone_number' => $_POST['phone_number1'],
+				'ostan' => $_POST['ostan'],
+				'city' => $_POST['city'],
+				'address' => $_POST['address'],
+				'postal_code' => $_POST['postal_code'],
+				'modified' => $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s')
+			];
+
+			$input_register = [
+				'role' => $_POST['role']
+			];
+
+			// قوانین اعتبارسنجی
+			$this->form_validation->set_message('required', 'فیلد الزامی');
+			$this->form_validation->set_message('min_length', '%s باید حداقل %d کاراکتر داشته باشد');
+			$this->form_validation->set_message('max_length', '%s باید حداکثر %d کاراکتر داشته باشد');
+			$this->form_validation->set_message('regex_match', 'فقط از حروف استفاده کنید');
+			$this->form_validation->set_message('_phoneRegex', 'شماره وارد شده نادرست است');
+
+			$this->form_validation->set_rules('role', 'نوع کاربر', 'required');
+			$this->form_validation->set_rules('phone_number', 'شماره موبایل', 'required|min_length[10]|max_length[11]|callback__phoneRegex');
+
+			if ($this->form_validation->run()) {
+
+				// گرفتن مقادیر فعلی از دیتابیس
+				$old_profile_arr = $this->base_model->get_data('profile', '*', ['user_id' => $id], NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'array');
+				$old_register_arr = $this->base_model->get_data('register', '*', ['id' => $id], NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'array');
+
+				if (empty($old_profile_arr) || empty($old_register_arr)) {
+					show_error('کاربر پیدا نشد');
+					return;
+				}
+
+				$old_profile = $old_profile_arr[0];
+				$old_register = $old_register_arr[0];
+
+				// تشخیص تغییرات واقعی
+				$changed_profile = array_intersect_assoc($input_profile, $old_profile);
+				$changed_register = array_intersect_assoc($input_register, $old_register);
+
+				$diff_profile_old = [];
+				$diff_profile_new = [];
+				foreach ($input_profile as $key => $value) {
+					if (!array_key_exists($key, $old_profile) || $old_profile[$key] != $value) {
+						$diff_profile_old[$key] = $old_profile[$key] ?? null;
+						$diff_profile_new[$key] = $value;
+					}
+				}
+
+				$diff_register_old = [];
+				$diff_register_new = [];
+				foreach ($input_register as $key => $value) {
+					if (!array_key_exists($key, $old_register) || $old_register[$key] != $value) {
+						$diff_register_old[$key] = $old_register[$key] ?? null;
+						$diff_register_new[$key] = $value;
+					}
+				}
+
+				// بروزرسانی دیتابیس
+				$this->base_model->update_data('profile', $input_profile, ['user_id' => $id]);
+				$this->base_model->update_data('register', $input_register, ['id' => $id]);
+
+				// ایجاد گروه لاگ
+				$group_id = uniqid('grp_', true);
+				$operationInfo = "ویرایش اطلاعات کاربر";
+
+				// لاگ تغییرات profile
+				if (!empty($diff_profile_old)) {
+					$this->base_model->add_log(
+						'profile',
+						$id,
+						'update',
+						$diff_profile_old,
+						$diff_profile_new,
+						'ویرایش اطلاعات پروفایل کاربر',
+						$group_id,
+						$operationInfo
+					);
+				}
+
+				// لاگ تغییرات register
+				if (!empty($diff_register_old)) {
+					$this->base_model->add_log(
+						'register',
+						$id,
+						'update',
+						$diff_register_old,
+						$diff_register_new,
+						'ویرایش اطلاعات ثبت‌نام کاربر',
+						$group_id,
+						$operationInfo
+					);
+				}
+
+				redirect('admin/edit_user/' . $id);
+			} else {
+				$this->edit_user($id);
+			}
 		}
 	}
+
+
+
+
+
+
+
+
+	public function delete_users_checked() {
+		if (isset($_POST['ids1']) && isset($_POST['ids2'])) {
+			$ids1 = explode(',', $_POST['ids1']);
+			$ids2 = explode(',', $_POST['ids2']);
+
+			$results = $this->base_model->delete_rows_by_ids($ids1,'register');
+			$results2 = $this->base_model->delete_rows_by_ids($ids2,'profile');
+
+			if ($results === TRUE && $results2 === TRUE) {
+				echo '<span style="color:green;">row(s) successfully deleted</span>';
+			} else {
+				echo '<span style="color:red;">Something went wrong during row deletion</span>';
+			}
+		} else {
+			echo '<span style="color:red;">You must select at least one row for deletion</span>';
+		}
+	}
+
+	public function status(){
+		if ($_POST) {
+			$id = $_POST['id'];
+			$data['status'] = $_POST['status'];
+			$this->base_model->update('shopping_cart_order', array('order_code' => $id), $data);
+		}
+	}
+
+
+
 
 
 
@@ -5411,139 +5607,6 @@ class Admin extends CI_Controller
       </tr>';
 		}
 		$output .= '</table>';
-		echo $output;
-	}
-	public function edit_user($id)
-	{
-		$data['title']='ویرایش کاربر';
-		$data['profile']=$this->base_model->get_data('profile','*',array('user_id'=>$id));
-		$data['role']=$this->base_model->get_data('role','*');
-		$data['province']=$this->base_model->get_data('province','*');
-		$data['city']=$this->base_model->get_data('city','*');
-		$data['register']=$this->base_model-> get_data('register','*',array('id'=>$id));
-
-
-		$this->load->view('admin/layout/header',$data);
-		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/edit-user');
-	}
-	public function edit_u($id){
-		if($_POST){
-
-			$this->load->library('form_validation');
-			$this->load->helper('form');
-
-			$data2['role'] = $_POST['role'];
-			$data['name'] = $_POST['name'];
-			$data['family'] = $_POST['family'];
-			$data['reciever_phone_number'] = $_POST['phone_number1'];
-			$data['ostan'] = $_POST['ostan'];
-			$data['city'] = $_POST['city'];
-			$data['address'] = $_POST['address'];
-			$data['postal_code'] = $_POST['postal_code'];
-
-
-			$this->form_validation->set_message('required', 'فیلد الزامی');
-			$this->form_validation->set_message('min_length', '%s باید حداقل %d کاراکتر داشته باشد');
-			$this->form_validation->set_message('max_length', '%s باید حداکثر %d کاراکتر داشته باشد');
-			$this->form_validation->set_message('regex_match', 'فقط از حروف استفاده کنید');
-			$this->form_validation->set_message('_phoneRegex', 'شماره وارد شده نادرست است');
-
-			$this->form_validation->set_rules('role', 'شماره موبایل ضروری', 'required');
-			$this->form_validation->set_rules('phone_number', 'شماره موبایل ضروری', 'required|min_length[10]|max_length[11]|callback__phoneRegex');
-
-
-
-			if($this->form_validation->run()) {
-				if ($_POST) {
-					date_default_timezone_set("Asia/Tehran");
-					$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-
-					$data['name'] = $_POST['name'];
-					$data['family'] = $_POST['family'];
-					$data['reciever_phone_number'] = $_POST['phone_number1'];
-					$data['address'] = $_POST['address'];
-					$data['ostan'] = $_POST['ostan'];
-					$data['city'] = $_POST['city'];
-					$data['postal_code'] = $_POST['postal_code'];
-
-
-					$this->base_model->update('profile', array('user_id' => $id), $data);
-
-					$data2['role'] = $_POST['role'];
-
-					$this->base_model->update('register', array('id' => $id), $data2);
-
-					redirect('admin/edit_user/'.$id);
-
-				}
-			}else{
-				$this->edit_user($id);
-			}
-
-		}
-	}
-
-
-	public function get_city(){
-		$province_id=$this->input->post('province_id');
-		$city=$this->base_model->get_data('city','*',array('province_id'=>$province_id));
-		$result='<option value="">انتخاب کنید</option>';
-		foreach($city as $row){
-			$result=$result."<option value='$row->id'>$row->name</option>";
-		}
-		echo $result;
-	}
-
-	public function delete_users_checked() {
-		if (isset($_POST['ids1']) && isset($_POST['ids2'])) {
-			$ids1 = explode(',', $_POST['ids1']);
-			$ids2 = explode(',', $_POST['ids2']);
-
-			$results = $this->base_model->delete_rows_by_ids($ids1,'register');
-			$results2 = $this->base_model->delete_rows_by_ids($ids2,'profile');
-
-			if ($results === TRUE && $results2 === TRUE) {
-				echo '<span style="color:green;">row(s) successfully deleted</span>';
-			} else {
-				echo '<span style="color:red;">Something went wrong during row deletion</span>';
-			}
-		} else {
-			echo '<span style="color:red;">You must select at least one row for deletion</span>';
-		}
-	}
-
-	public function status(){
-		if ($_POST) {
-		$id = $_POST['id'];
-		$data['status'] = $_POST['status'];
-		$this->base_model->update('shopping_cart_order', array('order_code' => $id), $data);
-		}
-	}
-
-	function search_ostan()
-	{
-		$output = '';
-		$query = '';
-		if($this->input->post('query'))
-		{
-			$query = $this->input->post('query');
-		}
-
-		$data = $this->base_model->search_ostan($query);
-
-
-		if($data->num_rows() > 0)
-		{
-			foreach($data->result() as $row)
-			{
-				$output .= ' <a
-				class="prov_tag" id="prov_tag_'.$row->id.'" id_prov="'.$row->id.'" style="display: block;">'.$row->name.'</a> ';
-
-			}
-		} else {
-			$output = 0;
-		}
 		echo $output;
 	}
 
