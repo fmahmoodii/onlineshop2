@@ -90,7 +90,7 @@
 							<div class="form-group">
 								<label for="phone_number" class="required">شماره موبایل:</label>
 								<span style="color: red" id="ph_err"></span>
-								<input autocomplete="off" id="phone_number" name="phone_number" type="text" class="form-control positive" value="<?php if (form_error('phone_number')) {echo set_value('phone_number');}?>" placeholder="شماره موبایل">
+								<input maxlength="11" autocomplete="off" id="phone_number" name="phone_number" type="text" class="form-control positive" value="<?php if (form_error('phone_number')) {echo set_value('phone_number');}?>" placeholder="شماره موبایل">
 								<?php echo form_error('phone_number','<span style="color: red">','</span>') ?>
 							</div>
 							<div class="form-group">

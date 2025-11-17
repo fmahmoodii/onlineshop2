@@ -17,7 +17,7 @@ class Admin extends CI_Controller
 
 		$exploadeddate = explode(' ', $miladi_date);
 		$gmtdate = explode('-', $exploadeddate[0]);
-		return $this->jalali_date->gregorian_to_jalali($gmtdate[0], $gmtdate[1], $gmtdate[2], '/');
+		return $this->jalali_date->gregorian_to_jalali($gmtdate[0], $gmtdate[1], $gmtdate[2], '-');
 	}
 	//<<--------------- end date_shamsi_ghamari ---------------->>
 
@@ -71,7 +71,7 @@ class Admin extends CI_Controller
 			]);
 
 			$group_id = uniqid('grp_', true);
-			$operationInfo = "تلاش ورود ادمین";
+			$operationInfo = "ورود ادمین";
 
 			if (!empty($admin)) {
 				$this->session->set_userdata('id', $admin[0]->id);
@@ -139,7 +139,6 @@ class Admin extends CI_Controller
 		redirect('admin/login_page');
 	}
 
-
 	public function registered_users(){
 		$data['profile']=$this->base_model->get_data('profile','*');
 		$data['register']=$this->base_model->get_data('register','*');
@@ -168,7 +167,7 @@ class Admin extends CI_Controller
 		];
 
 		$table = 'register';
-		$select = 'profile.id, profile.user_id, register.id as user_id, role.name as role, profile.name, profile.family, register.phone_number, register.created, register.modified, register.IsActive';
+		$select = 'profile.id, profile.user_id, register.id as user_id, role.name as role, profile.name, profile.family, register.phone_number, register.created, register.modified, register.isActive';
 
 		// دریافت داده‌ها با مدل جدید
 		$result = $this->base_model->datatable($table, $columns, $_POST, $select, $join, null, ['register.id' => 'DESC']);
@@ -184,7 +183,7 @@ class Admin extends CI_Controller
 			$sub_array[] = htmlspecialchars($row->created);
 			$sub_array[] = htmlspecialchars($row->modified);
 
-			$sub_array[] = ($row->IsActive == 0)
+			$sub_array[] = ($row->isActive == 0)
 				? '<button type="button" id="active" user_id="'.$row->user_id.'" id_prof="'.$row->id.'" class="btn btn-primary btn-xs">فعالسازی</button>'
 				: '<button type="button" id="deactive" user_id="'.$row->user_id.'" id_prof="'.$row->id.'" class="btn btn-secondry btn-xs">غیرفعالسازی</button>';
 
@@ -245,63 +244,71 @@ class Admin extends CI_Controller
 		}
 	}
 
-	public function toggle_user_status()
+	function toggle_user_status()
 	{
-		if ($this->input->post()) {
+		if ($_POST) {
+
 			$user_ids = [];
 
-			// گرفتن چند رکورد انتخاب‌شده
-			if ($this->input->post('user_ids') && is_array($this->input->post('user_ids'))) {
-				$user_ids = $this->input->post('user_ids');
+			// چند انتخابی
+			if ($_POST['user_ids'] && is_array($_POST['user_ids'])) {
+				$user_ids = $_POST['user_ids'];
 			}
 
-			// اگر فقط یک رکورد تکی ارسال شده
-			if ($this->input->post('user_id')) {
-				$user_ids[] = $this->input->post('user_id');
+			// تکی
+			if ($_POST['user_id']) {
+				$user_ids[] = $_POST['user_id'];
 			}
 
-			// بررسی اینکه حداقل یک آی‌دی وجود دارد
 			if (!empty($user_ids)) {
-				$status = isset($_POST['status']) ? intval($_POST['status']) : 1; // 1 = فعال، 0 = غیرفعال
+
+				$status = isset($_POST['status']) ? intval($_POST['status']) : 1;
 
 				$group_id = uniqid('grp_', true);
 				$operationInfo = "تغییر وضعیت کاربران";
 
-				// گرفتن اطلاعات قبلی کاربران
+				// گرفتن اطلاعات قبل از تغییر
 				$users_before = $this->base_model->get_data('register', '*', NULL, NULL, NULL, ['id' => $user_ids]);
 
 				foreach ($users_before as $user) {
-					$old_value = (array) $user;
 
-					// آپدیت وضعیت در جدول register
-					$this->base_model->update_data('register', ['IsActive' => $status], ['id' => $user->id]);
+					// old_value فقط همان فیلد تغییر یافته
+					$old_value = [
+						'isActive' => $user->isActive
+					];
 
-					// گرفتن اطلاعات جدید بعد از آپدیت
-					$user_after = $this->base_model->get_data('register', '*', ['id' => $user->id]);
-					$new_value = isset($user_after[0]) ? (array) $user_after[0] : [];
+					// آپدیت
+					$this->base_model->update_data('register', ['isActive' => $status], ['id' => $user->id]);
 
-					// ساخت متن لاگ
-					$details = ($status ? 'فعال‌سازی' : 'غیرفعال‌سازی') . ' کاربر با شماره موبایل: ' . $user->phone_number;
+					// مقدار جدید
+					$new_value = [
+						'isActive' => $status
+					];
 
-					// ثبت لاگ
+					// توضیحات لاگ
+					$details =
+						($status ? 'فعالسازی ' : 'غیرفعالسازی ') .
+						'کاربر با شماره موبایل: ' . $user->phone_number;
+
+					// ثبت در لاگ
 					$this->base_model->add_log(
-						'register',       // entity_type
-						$user->id,        // entity_id
-						'update_status',  // action
-						$old_value,       // old_value
-						$new_value,       // new_value
-						$details,         // details
-						$group_id,        // group_id
-						$operationInfo    // operation_info
+						'register',
+						$user->id,
+						'update_status',
+						$old_value,
+						$new_value,
+						$details,
+						$group_id,
+						$operationInfo
 					);
 				}
 
-				echo 1; // موفقیت
+				echo 1;
 			} else {
-				echo 0; // هیچ رکوردی برای تغییر وجود ندارد
+				echo 0;
 			}
 		} else {
-			echo 0; // درخواست POST نیست
+			echo 0;
 		}
 	}
 
@@ -364,6 +371,18 @@ class Admin extends CI_Controller
 		}else{
 			return false;
 		}
+	}
+	public function _postal_check($str)
+	{
+		if (empty($str)) {
+			// خالی بودن مجازه
+			return TRUE;
+		}
+		if (preg_match('/^\d{10}$/', $str)) {
+			return TRUE;
+		}
+		$this->form_validation->set_message('postal_check', 'کد پستی باید 10 رقم باشد.');
+		return FALSE;
 	}
 	public function get_city(){
 		$province_id=$this->input->post('province_id');
@@ -428,10 +447,12 @@ class Admin extends CI_Controller
 			$this->form_validation->set_message('max_length', '%s باید حداکثر %d کاراکتر داشته باشد');
 			$this->form_validation->set_message('regex_match', 'فقط از حروف استفاده کنید');
 			$this->form_validation->set_message('_phoneRegex', 'شماره وارد شده نادرست است');
+			$this->form_validation->set_message('_phoneRegex', 'در صورت ورود کدپستی، باید 10 رقم باشد');
 
 			$this->form_validation->set_rules('role', 'نوع کاربر', 'required');
 			$this->form_validation->set_rules('password', 'رمز عبور', 'required|min_length[8]|max_length[25]');
 			$this->form_validation->set_rules('phone_number', 'شماره موبایل', 'required|min_length[10]|max_length[11]|callback__phoneRegex');
+			$this->form_validation->set_rules('postal_code', 'کد پستی', 'callback__postal_check');
 
 			if ($this->form_validation->run()) {
 
@@ -531,116 +552,102 @@ class Admin extends CI_Controller
 		$this->load->view('admin/edit-user');
 	}
 
-	public function edit_u($id) {
-		if ($_POST) {
+	public function edit_u($id)
+	{
+		if (!$this->input->post()) {
+			redirect('admin/edit_user/'.$id);
+			return;
+		}
 
-			$this->load->library('form_validation');
-			$this->load->helper('form');
+		$this->load->library('form_validation');
+		$this->form_validation->set_rules('role', 'نوع کاربر', 'required');
+		$this->form_validation->set_rules('phone_number', 'شماره موبایل', 'required|min_length[10]|max_length[11]|callback__phoneRegex');
 
-			// تعریف داده‌های ارسالی
-			$input_profile = [
-				'name' => $_POST['name'],
-				'family' => $_POST['family'],
-				'reciever_phone_number' => $_POST['phone_number1'],
-				'ostan' => $_POST['ostan'],
-				'city' => $_POST['city'],
-				'address' => $_POST['address'],
-				'postal_code' => $_POST['postal_code'],
-				'modified' => $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s')
-			];
+		if (!$this->form_validation->run()) {
+			$this->edit_user($id);
+			return;
+		}
 
-			$input_register = [
-				'role' => $_POST['role']
-			];
+		date_default_timezone_set("Asia/Tehran");
+		$modified_time = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
 
-			// قوانین اعتبارسنجی
-			$this->form_validation->set_message('required', 'فیلد الزامی');
-			$this->form_validation->set_message('min_length', '%s باید حداقل %d کاراکتر داشته باشد');
-			$this->form_validation->set_message('max_length', '%s باید حداکثر %d کاراکتر داشته باشد');
-			$this->form_validation->set_message('regex_match', 'فقط از حروف استفاده کنید');
-			$this->form_validation->set_message('_phoneRegex', 'شماره وارد شده نادرست است');
+		// --- new data ---
+		$new_profile = [
+			'name' => $this->input->post('name'),
+			'family' => $this->input->post('family'),
+			'reciever_phone_number' => $this->input->post('phone_number1'),
+			'ostan' => $this->input->post('ostan'),
+			'city' => $this->input->post('city'),
+			'address' => $this->input->post('address'),
+			'postal_code' => $this->input->post('postal_code'),
+			'modified' => $modified_time
+		];
 
-			$this->form_validation->set_rules('role', 'نوع کاربر', 'required');
-			$this->form_validation->set_rules('phone_number', 'شماره موبایل', 'required|min_length[10]|max_length[11]|callback__phoneRegex');
+		$new_register = [
+			'role' => $this->input->post('role'),
+			'modified' => $modified_time
+		];
 
-			if ($this->form_validation->run()) {
+		// --- old data ---
+		$old_profile = (array)$this->base_model->get_data('profile', '*', ['user_id' => $id])[0];
+		$old_register = (array)$this->base_model->get_data('register', '*', ['id' => $id])[0];
 
-				// گرفتن مقادیر فعلی از دیتابیس
-				$old_profile_arr = $this->base_model->get_data('profile', '*', ['user_id' => $id], NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'array');
-				$old_register_arr = $this->base_model->get_data('register', '*', ['id' => $id], NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'array');
-
-				if (empty($old_profile_arr) || empty($old_register_arr)) {
-					show_error('کاربر پیدا نشد');
-					return;
-				}
-
-				$old_profile = $old_profile_arr[0];
-				$old_register = $old_register_arr[0];
-
-				// تشخیص تغییرات واقعی
-				$changed_profile = array_intersect_assoc($input_profile, $old_profile);
-				$changed_register = array_intersect_assoc($input_register, $old_register);
-
-				$diff_profile_old = [];
-				$diff_profile_new = [];
-				foreach ($input_profile as $key => $value) {
-					if (!array_key_exists($key, $old_profile) || $old_profile[$key] != $value) {
-						$diff_profile_old[$key] = $old_profile[$key] ?? null;
-						$diff_profile_new[$key] = $value;
-					}
-				}
-
-				$diff_register_old = [];
-				$diff_register_new = [];
-				foreach ($input_register as $key => $value) {
-					if (!array_key_exists($key, $old_register) || $old_register[$key] != $value) {
-						$diff_register_old[$key] = $old_register[$key] ?? null;
-						$diff_register_new[$key] = $value;
-					}
-				}
-
-				// بروزرسانی دیتابیس
-				$this->base_model->update_data('profile', $input_profile, ['user_id' => $id]);
-				$this->base_model->update_data('register', $input_register, ['id' => $id]);
-
-				// ایجاد گروه لاگ
-				$group_id = uniqid('grp_', true);
-				$operationInfo = "ویرایش اطلاعات کاربر";
-
-				// لاگ تغییرات profile
-				if (!empty($diff_profile_old)) {
-					$this->base_model->add_log(
-						'profile',
-						$id,
-						'update',
-						$diff_profile_old,
-						$diff_profile_new,
-						'ویرایش اطلاعات پروفایل کاربر',
-						$group_id,
-						$operationInfo
-					);
-				}
-
-				// لاگ تغییرات register
-				if (!empty($diff_register_old)) {
-					$this->base_model->add_log(
-						'register',
-						$id,
-						'update',
-						$diff_register_old,
-						$diff_register_new,
-						'ویرایش اطلاعات ثبت‌نام کاربر',
-						$group_id,
-						$operationInfo
-					);
-				}
-
-				redirect('admin/edit_user/' . $id);
-			} else {
-				$this->edit_user($id);
+		// --- diffs ---
+		$diff_p_old = $diff_p_new = [];
+		foreach ($new_profile as $k => $v) {
+			if ((string)$old_profile[$k] !== (string)$v) {
+				$diff_p_old[$k] = $old_profile[$k];
+				$diff_p_new[$k] = $v;
 			}
 		}
+
+		$diff_r_old = $diff_r_new = [];
+		foreach ($new_register as $k => $v) {
+			if ((string)$old_register[$k] !== (string)$v) {
+				$diff_r_old[$k] = $old_register[$k];
+				$diff_r_new[$k] = $v;
+			}
+		}
+
+		// --- update DB ---
+		$this->base_model->update_data('profile', $new_profile, ['user_id' => $id]);
+		$this->base_model->update_data('register', $new_register, ['id' => $id]);
+
+		$group_id = uniqid('grp_', true);
+		$operationInfo = "ویرایش اطلاعات کاربر";
+
+		// --- logs ---
+		if (!empty($diff_r_old)) {
+			$this->base_model->add_log(
+				'register',
+				$id,
+				'update',
+				$diff_r_old,
+				$diff_r_new,
+				'تغییر اطلاعات ثبت نام کاربر',
+				$group_id,
+				$operationInfo
+			);
+		}
+
+		if (!empty($diff_p_old)) {
+			$this->base_model->add_log(
+				'profile',
+				$id,
+				'update',
+				$diff_p_old,
+				$diff_p_new,
+				'تغییر اطلاعات پروفایل کاربر',
+				$group_id,
+				$operationInfo
+			);
+		}
+
+		redirect('admin/edit_user/'.$id);
 	}
+
+
+
 
 
 
@@ -667,13 +674,7 @@ class Admin extends CI_Controller
 		}
 	}
 
-	public function status(){
-		if ($_POST) {
-			$id = $_POST['id'];
-			$data['status'] = $_POST['status'];
-			$this->base_model->update('shopping_cart_order', array('order_code' => $id), $data);
-		}
-	}
+
 
 
 
@@ -5552,62 +5553,12 @@ class Admin extends CI_Controller
 		}
 	}
 
-
-
-
-	function users_list2()
-	{
-		$output = '';
-		$query = '';
-		if($_POST)
-		{
-			$query = $this->input->post('query');
+	public function status(){
+		if ($_POST) {
+			$id = $_POST['id'];
+			$data['status'] = $_POST['status'];
+			$this->base_model->update('shopping_cart_order', array('order_code' => $id), $data);
 		}
-		$data = $this->base_model->search_user($query);
-
-		$output .= '
-  <div class="table-responsive">
-     <table class="table table-bordered table-striped">
-      <tr>
-      			<th >شناسه کاربری</th>
-                <th>نام</th>
-                <th >نام خانوادگی</th>
-                <th >شماره موبایل</th>
-                <th style="text-align: center">جزئیات</th>
-            </tr>
-  ';
-		if($data->num_rows() > 0)
-		{
-			foreach($data->result() as $row)
-			{
-				$output .= '
-            
-                <tr id="prof_'.$row->id.'">
-                    <td>'.$row->user_id.'</td>
-                    <td>'.$row->name.'</td>
-                    <td>'.$row->family.'</td>
-                    <td>'.$row->phone_number.'</td>
-                    <td style="text-align: center">
-                        <a href="'. base_url('admin/edit_user/').$row->id .'">
-                            <button style="outline: unset;" class="btn btn-info">ویرایش </button>
-                        </a>
-                        <button style="outline: unset;" id="delete" user_id="'.$row->user_id.'" id_prof="'.$row->id.'" class="btn btn-danger">حذف </button>
-                    </td>
-                </tr>
-            
-              ';
-
-
-			}
-		}
-		else
-		{
-			$output .= '<tr>
-       <td colspan="5">موردی یافت نشد</td>
-      </tr>';
-		}
-		$output .= '</table>';
-		echo $output;
 	}
 
 
