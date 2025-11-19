@@ -365,13 +365,45 @@ class Admin extends CI_Controller
 		}
 	}
 
-	public function _phoneRegex($phone_number1){
-		if (preg_match('/^(\+98|0)?9\d{9}$/', $phone_number1)){
+	public function _phoneRegex($phn_num){
+		// اگر فیلد خالی بود، اجازه بده rule "required" پیام خودش را نمایش دهد
+		if (empty($phone)) {
+			return TRUE;
+		}
+		if (preg_match('/^(\+98|0)?9\d{9}$/', $phn_num)){
 			return true;
 		}else{
 			return false;
 		}
 	}
+	public function _phoneExists($phone)
+	{
+		// اگر خالی بود (به خاطر required)، اجازه بده ولیدیشن ادامه پیدا کند
+		if (empty($phone)) {
+			return TRUE;
+		}
+
+		$existing = $this->base_model->get_data('register', '*', ['phone_number' => $phone]);
+
+		if (!empty($existing)) {
+//			$this->form_validation->set_message('_phoneExists', 'این شماره موبایل قبلاً ثبت شده است');
+			return FALSE;
+		}
+
+		return TRUE;
+	}
+	public function _phoneRegex2($phn_num2)
+    {
+        if (empty($phn_num2)) {
+            // خالی بودن مجازه
+            return TRUE;
+        }
+        if (preg_match('/^(\+98|0)?9\d{9}$/', $phn_num2)){
+            return TRUE;
+        }
+        $this->form_validation->set_message('postal_check', 'شماره موبایل نادرست است');
+        return FALSE;
+    }
 	public function _postal_check($str)
 	{
 		if (empty($str)) {
@@ -419,7 +451,27 @@ class Admin extends CI_Controller
 		echo $output;
 	}
 
-	public function insert_user()
+
+    public function check_phone()
+    {
+        if ($this->input->post('phone_number')) {
+            $phone = $this->input->post('phone_number', true);
+
+            // بررسی وجود شماره موبایل در جدول register
+            $existing = $this->base_model->get_data('register', '*', ['phone_number' => $phone]);
+
+            if (!empty($existing)) {
+                echo 'exists';
+            } else {
+                echo 'ok';
+            }
+        } else {
+            echo 'ok';
+        }
+    }
+
+
+    public function insert_user()
 	{
 		$data['profile']=$this->base_model->get_data('profile','*');
 		$data['register']=$this->base_model->get_data('register','*');
@@ -447,11 +499,14 @@ class Admin extends CI_Controller
 			$this->form_validation->set_message('max_length', '%s باید حداکثر %d کاراکتر داشته باشد');
 			$this->form_validation->set_message('regex_match', 'فقط از حروف استفاده کنید');
 			$this->form_validation->set_message('_phoneRegex', 'شماره وارد شده نادرست است');
-			$this->form_validation->set_message('_phoneRegex', 'در صورت ورود کدپستی، باید 10 رقم باشد');
+			$this->form_validation->set_message('_phoneExists', 'شماره وارد شده تکراری است');
+			$this->form_validation->set_message('_phoneRegex2', 'شماره وارد شده نادرست است');
+			$this->form_validation->set_message('_postal_check', 'در صورت ورود کدپستی، باید 10 رقم باشد');
 
 			$this->form_validation->set_rules('role', 'نوع کاربر', 'required');
 			$this->form_validation->set_rules('password', 'رمز عبور', 'required|min_length[8]|max_length[25]');
-			$this->form_validation->set_rules('phone_number', 'شماره موبایل', 'required|min_length[10]|max_length[11]|callback__phoneRegex');
+			$this->form_validation->set_rules('phone_number', 'شماره موبایل', 'required|min_length[10]|max_length[11]|callback__phoneRegex|callback__phoneExists');
+			$this->form_validation->set_rules('phone_number1', 'شماره موبایل ضروری', 'callback__phoneRegex2');
 			$this->form_validation->set_rules('postal_code', 'کد پستی', 'callback__postal_check');
 
 			if ($this->form_validation->run()) {

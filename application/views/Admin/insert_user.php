@@ -75,7 +75,7 @@
 							<div class="form-group">
 								<label for="name" class="">نام:</label>
 								<span style="color: red" id="name_err"></span>
-								<input autocomplete="off" id="name" name="name" type="text" class="form-control" value="<?php if (form_error('name')) {echo set_value('name');}?>" placeholder="نام">
+								<input maxlength="25" autocomplete="off" id="name" name="name" type="text" class="form-control" value="<?php if (form_error('name')) {echo set_value('name');}?>" placeholder="نام">
 								<?php echo form_error('name','<span style="color: red">','</span>') ?>
 
 							</div>
@@ -83,7 +83,7 @@
 							<div class="form-group">
 								<label for="family" class="">نام خانوادگی:</label>
 								<span style="color: red" id="family_err"></span>
-								<input autocomplete="off" id="family" name="family" type="text" class="form-control" value="<?php if (form_error('family')) {echo set_value('family');}?>" placeholder="نام خانوادگی">
+								<input maxlength="25" autocomplete="off" id="family" name="family" type="text" class="form-control" value="<?php if (form_error('family')) {echo set_value('family');}?>" placeholder="نام خانوادگی">
 								<?php echo form_error('family','<span style="color: red">','</span>') ?>
 							</div>
 
@@ -96,7 +96,9 @@
 							<div class="form-group">
 								<label for="password" class="required">رمز عبور :</label>
 								<span style="color: red" id="pass_err"></span>
-								<input autocomplete="off" id="password" name="password" type="password" class="form-control positive" value="<?php if (form_error('phone_number')) {echo set_value('phone_number');}?>" placeholder="رمز عبور">
+								<input autocomplete="new-password" id="password" name="password" type="password" class="form-control positive"  placeholder="رمز عبور">
+<!--									   value="--><?php //if (form_error('password')) {echo set_value('password');}?><!--" -->
+
 								<?php echo form_error('password','<span style="color: red">','</span>') ?>
 							</div>
 
@@ -165,6 +167,40 @@
 
 
 <script>
+
+	$('#phone_number').on('input', function() {
+			var pn = $(this).val();
+			var errorEl = $('#ph_err');
+			var regex = /^(0)?9\d{9}$/; // قبول با صفر یا بدون صفر
+
+			// پاک کردن پیام قبلی
+			errorEl.html('').css('color','');
+
+			// فقط وقتی طول به حد نصاب رسید بررسی کن
+			if (pn.length === 10 || pn.length === 11) {
+				if (regex.test(pn)) {
+					// شماره درست، حالا بررسی شماره تکراری با AJAX
+					$.ajax({
+						url: "<?= base_url('admin/check_phone') ?>", // تابع سرور برای چک کردن
+						method: "POST",
+						data: { phone_number: pn },
+						success: function(data) {
+							if (data == 'exists') {
+								errorEl.html('این شماره موبایل قبلاً ثبت شده است').css('color','red');
+							} else {
+								errorEl.html('شماره موبایل معتبر است').css('color','green');
+							}
+						}
+					});
+				} else {
+					errorEl.html('شماره وارد شده نادرست است').css('color','red');
+				}
+			} else if (pn.length > 11) {
+				errorEl.html('تعداد ارقام بیشتر از حد مجاز است').css('color','red');
+			}
+		});
+
+
 	//---------get_city-----------
 	$('#ostan').change(function(){
 		province_id=$("#ostan").val();
