@@ -15,18 +15,52 @@
 							<label for="role" class="required">نوع کاربر:</label>
 
 							<select class="form-control" id="role" name="role">
-								<option selected value="<?php foreach ($register as $reg){foreach ($role as $ro){if($reg->id==$p->user_id){if ($ro->id==$reg->role){echo $ro->id;}}}}?>">
-									<?php foreach ($profile as $p){foreach ($register as $reg){foreach ($role as $ro){
-										if($reg->id==$p->user_id){if ($reg->role==''){echo "انتخاب کنید..."; break;}
-										else{if($ro->id==$reg->role){echo $ro->name;}}}}}}?>
+
+								<option selected value="<?php
+								foreach ($register as $reg){
+									foreach ($role as $ro){
+										if($reg->id == $p->user_id){
+											if ($ro->id == $reg->role){
+												echo $ro->id;
+											}
+										}
+									}
+								}
+								?>">
+									<?php
+									foreach ($profile as $p){
+										foreach ($register as $reg){
+											foreach ($role as $ro){
+												if($reg->id == $p->user_id){
+													if ($reg->role == ''){
+														echo "انتخاب کنید...";
+														break;
+													} else {
+														if($ro->id == $reg->role){
+															echo $ro->name;
+														}
+													}
+												}
+											}
+										}
+									}
+									?>
 								</option>
-								<?php foreach ($role as $ro){ ?>
-									<option value="<?php echo $ro->id?>"><?php echo $ro->name?></option>
-								<?php }?>
+
+								<?php
+								foreach ($role as $ro){
+									// جلوگیری از تکرار مقدار انتخاب شده قبلی
+									// ($reg->role همان مقدار select شده قبلی است)
+									if ($ro->id == $reg->role) continue;
+									?>
+									<option value="<?php echo $ro->id; ?>"><?php echo $ro->name; ?></option>
+								<?php } ?>
 
 							</select>
+
 							<?php echo form_error('role','<span style="color: red">','</span>') ?>
 						</div>
+
 
 						<div class="form-group">
 							<label for="name" class="">نام:</label>

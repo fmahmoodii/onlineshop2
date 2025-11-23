@@ -1,74 +1,33 @@
-<style>/* The snackbar - position it at the bottom and in the middle of the screen */
-	#snackbar {
-		visibility: hidden; /* Hidden by default. Visible on click */
-		min-width: 250px; /* Set a default minimum width */
-		margin-left: -125px; /* Divide value of min-width by 2 */
-		background-color: #333; /* Black background color */
-		color: #fff; /* White text color */
-		text-align: center; /* Centered text */
-		border-radius: 2px; /* Rounded borders */
-		padding: 16px; /* Padding */
-		position: fixed; /* Sit on top of the screen */
-		z-index: 1; /* Add a z-index if needed */
-		left: 50%; /* Center the snackbar */
-		bottom: 30px; /* 30px from the bottom */
-	}
 
-	/* Show the snackbar when clicking on a button (class added with JavaScript) */
-	#snackbar.show {
-		visibility: visible; /* Show the snackbar */
-		/* Add animation: Take 0.5 seconds to fade in and out the snackbar.
-		However, delay the fade out process for 2.5 seconds */
-		-webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
-		animation: fadein 0.5s, fadeout 0.5s 2.5s;
-	}
-
-	/* Animations to fade the snackbar in and out */
-	@-webkit-keyframes fadein {
-		from {bottom: 0; opacity: 0;}
-		to {bottom: 30px; opacity: 1;}
-	}
-
-	@keyframes fadein {
-		from {bottom: 0; opacity: 0;}
-		to {bottom: 30px; opacity: 1;}
-	}
-
-	@-webkit-keyframes fadeout {
-		from {bottom: 30px; opacity: 1;}
-		to {bottom: 0; opacity: 0;}
-	}
-
-	@keyframes fadeout {
-		from {bottom: 30px; opacity: 1;}
-		to {bottom: 0; opacity: 0;}
-	}
-</style>
 
 <?php if($this->session->userdata('id')){ ?>
-
+	<div id="snackbar_del" class="snackbar">حذف با موفقیت انجام شد</div>
+	<div id="snackbar_ins" class="snackbar">درج با موفقیت انجام شد</div>
+	<div id="snackbar_upd" class="snackbar">ویرایش با موفقیت انجام شد</div>
 
 	<div class="container-fluid" id="content" >
 		<div class="row" style="margin-top: 50px; margin-bottom: 60px">
 			<div class="col-md-2"></div>
 			<div class="col-md-8">
 				<div style="padding: 20px;border-radius: 10px; border: 1px solid #ccc">
-						<form method="post" action='<?php echo base_url('admin/add_user') ?>' onsubmit="alert('ثبت شد');" >
+						<form method="post" action='<?php echo base_url('admin/add_user') ?>' >
 
 							<input hidden id="id" name="id">
 
 							<div class="form-group">
 								<label for="role" class="required">نوع کاربر:</label>
 								<select class="form-control" id="role" name="role"
-										onfocus='this.size=6;' onblur='this.size=6;' onfocusout='this.size=null;' onchange='this.size=6; this.blur();'
-								>
+										onfocus='this.size=6;' onblur='this.size=6;' onfocusout='this.size=null;' onchange='this.size=6; this.blur();'>
 
-									<option selected value=""><?php echo "انتخاب کنید.."; ?></option>
+									<option value="" <?php echo set_select('role', '', true); ?>>انتخاب کنید..</option>
 
 									<?php foreach ($role as $ro){ ?>
-										<option value="<?php echo $ro->id?>"><?php echo $ro->name?></option>
-									<?php }?>
+										<option value="<?php echo $ro->id?>" <?php echo set_select('role', $ro->id); ?>>
+											<?php echo $ro->name?>
+										</option>
+									<?php } ?>
 								</select>
+
 								<?php echo form_error('role','<span style="color: red">','</span>') ?>
 							</div>
 
@@ -161,12 +120,24 @@
 			</div>
 			<div class="col-md-2"></div>
 		</div>
-		<div id="snackbar">ثبت شد</div>
+
 	</div>
 <?php }?>
 
 
 <script>
+
+
+	$(document).ready(function () {
+		<?php if ($this->session->flashdata('success')) { ?>
+		showSnackbar('ins');
+		<?php } ?>
+
+		<?php if ($this->session->flashdata('error')) { ?>
+		showSnackbar('del');
+		<?php } ?>
+	});
+
 
 	$('#phone_number').on('input', function() {
 			var pn = $(this).val();

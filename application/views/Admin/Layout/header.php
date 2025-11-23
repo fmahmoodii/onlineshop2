@@ -35,8 +35,32 @@
 
 	<script src="<?php echo base_url()?>assets/js/dataTables.treeGrid.min.js"></script>
 
+	<!-- CSS لوکال -->
+	<link href="<?php echo base_url()?>assets/css/select2.min.css" rel="stylesheet" />
+
+	<!-- JS لوکال -->
+	<script src="<?php echo base_url()?>assets/js/select2.min.js"></script>
+
+	<script src="<?php echo base_url()?>assets/js/bootstrap-show-password.js"></script>
+
+
+	<script>
+		$("input[type='password']").password();
+
+		function showSnackbar(type) {
+			// type: 'del', 'ins', 'upd'
+			var id = 'snackbar_' + type;
+			var x = document.getElementById(id);
+			x.className = "snackbar show";
+
+			setTimeout(function() {
+				x.className = x.className.replace("show", "");
+			}, 3000);
+		}
+	</script>
+
 <!--	<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />-->
-	<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<!--	<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>-->
 
 	<script src="https://code.highcharts.com/highcharts.js"></script>
 
