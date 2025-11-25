@@ -61,52 +61,96 @@ class Admin extends CI_Controller
 	// 🔐 لاگین
 	public function login()
 	{
-		if ($this->input->post()) {
-			$username = $this->input->post('user_name', true);
-			$password = $this->input->post('password', true);
-
-			$admin = $this->base_model->get_data('admin', '*', [
-				'user_name' => $username,
-				'password'  => $password
-			]);
-
-			$group_id = uniqid('grp_', true);
-			$operationInfo = "ورود ادمین";
-
-			if (!empty($admin)) {
-				$this->session->set_userdata('id', $admin[0]->id);
-
-				$this->base_model->add_log(
-					'admin',
-					$admin[0]->id,
-					'login_success',
-					null,
-					null,
-					'ورود موفق به پنل ادمین با نام کاربری: ' . $username,
-					$group_id,
-					$operationInfo
-				);
-
-				redirect('admin');
-			} else {
-				$this->base_model->add_log(
-					'admin',
-					null,
-					'login_failed',
-					null,
-					null,
-					'تلاش ناموفق برای ورود به پنل ادمین با نام کاربری: ' . $username,
-					$group_id,
-					$operationInfo
-				);
-
-				$this->session->set_flashdata('err', 'نام کاربری یا رمز عبور اشتباه است.');
-				redirect('admin/login_page');
-			}
-		} else {
-			redirect('admin/login_page');
+		if (!$this->input->post()) {
+			return redirect('admin/login_page');
 		}
+
+		$username = $this->input->post('user_name', true);
+		$password = $this->input->post('password', true);
+
+		$group_id      = uniqid('grp_', true);
+		$operationInfo = "ورود ادمین";
+
+		// دریافت رکورد فقط بر اساس نام کاربری
+		$admin = $this->base_model->get_data('admin', '*', [
+			'user_name' => $username
+		]);
+
+		// اگر نام کاربری اشتباه باشد
+		if (empty($admin)) {
+
+			$this->base_model->add_log(
+				'admin',
+				null,
+				'login_failed_username_not_found',
+				null,
+				null,
+				'نام کاربری یافت نشد: ' . $username,
+				$group_id,
+				$operationInfo
+			);
+
+			$this->session->set_flashdata('err', 'نام کاربری یا رمز عبور اشتباه است');
+			return redirect('admin/login_page');
+		}
+
+		$admin = $admin[0];
+
+		// بررسی رمز عبور هش‌شده
+		if (!password_verify($password, $admin->password)) {
+
+			$this->base_model->add_log(
+				'admin',
+				$admin->id,
+				'login_failed_wrong_password',
+				null,
+				null,
+				'رمز عبور اشتباه برای نام کاربری: ' . $username,
+				$group_id,
+				$operationInfo
+			);
+
+			$this->session->set_flashdata('err', 'نام کاربری یا رمز عبور اشتباه است');
+			return redirect('admin/login_page');
+		}
+
+		// بررسی فعال بودن ادمین
+		if ($admin->isActive != 1) {
+
+			$this->base_model->add_log(
+				'admin',
+				$admin->id,
+				'login_inactive_user',
+				null,
+				null,
+				'تلاش برای ورود کاربر غیرفعال: ' . $username,
+				$group_id,
+				$operationInfo
+			);
+
+			$this->session->set_flashdata('err', 'حساب شما فعال نیست. لطفا با مدیریت تماس بگیرید');
+			return redirect('admin/login_page');
+		}
+
+		// ورود موفق
+		$this->session->set_userdata('id', $admin->id);
+
+		$this->base_model->add_log(
+			'admin',
+			$admin->id,
+			'login_success',
+			null,
+			null,
+			'ورود موفق با نام کاربری: ' . $username,
+			$group_id,
+			$operationInfo
+		);
+
+		return redirect('admin');
 	}
+
+
+
 
 	// 🚪 خروج از حساب
 	public function logout()
@@ -142,6 +186,8 @@ class Admin extends CI_Controller
 	public function registered_users(){
 		$data['profile']=$this->base_model->get_data('profile','*');
 		$data['register']=$this->base_model->get_data('register','*');
+		$data['roles']=$this->base_model->get_data('roles','*');
+		$data['user_roles']=$this->base_model->get_data('user_roles','*');
 		$data['title']='کاربران';
 		$this->load->view('admin/layout/header',$data);
 		$this->load->view('admin/layout/sidebar');
@@ -151,8 +197,8 @@ class Admin extends CI_Controller
 	public function users_list()
 	{
 		$columns = [
-			null,                   // برای checkbox یا دکمه‌ها
-			'role.name',
+			null,
+			'roles.name',
 			'profile.name',
 			'profile.family',
 			'register.phone_number',
@@ -163,13 +209,13 @@ class Admin extends CI_Controller
 
 		$join = [
 			'profile' => 'register.id = profile.user_id',
-			'role' => 'register.role = role.id'
+			'user_roles' => 'register.id = user_roles.user_id',
+			'roles' => 'user_roles.role_id = roles.id'
 		];
 
 		$table = 'register';
-		$select = 'profile.id, profile.user_id, register.id as user_id, role.name as role, profile.name, profile.family, register.phone_number, register.created, register.modified, register.isActive';
+		$select = 'profile.id, profile.user_id, register.id as user_id, roles.name as role, profile.name, profile.family, register.phone_number, register.created, register.modified, register.isActive';
 
-		// دریافت داده‌ها با مدل جدید
 		$result = $this->base_model->datatable($table, $columns, $_POST, $select, $join, null, ['register.id' => 'DESC']);
 
 		$data = [];
@@ -194,7 +240,6 @@ class Admin extends CI_Controller
 			$data[] = $sub_array;
 		}
 
-		// خروجی JSON برای DataTables
 		$output = [
 			"draw" => intval($_POST["draw"]),
 			"recordsTotal" => $result['recordsTotal'],
@@ -204,6 +249,7 @@ class Admin extends CI_Controller
 
 		echo json_encode($output);
 	}
+
 
 	public function delete_user()
 	{

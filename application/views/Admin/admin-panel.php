@@ -6,6 +6,8 @@
 	<h2 class="text-center">Codeigniter 3 - Highcharts mysql json example</h2>
 	<div class="row">
 		<div class="col-md-10 col-md-offset-1">
+<!--			--><?php //echo password_hash("admin", PASSWORD_BCRYPT); ?>
+
 			<div class="panel panel-default">
 				<div class="panel-heading">Dashboard - ItSolutionStuff.com</div>
 				<div class="panel-body">

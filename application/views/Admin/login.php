@@ -14,11 +14,11 @@
 </style>
 <div class="container-fluid">
 	<div class="row" style="padding: 50px;">
-		<?php if($this->session->flashdata('err')){ ?>
-		<div class="alert alert-warning" style="text-align: center;">
-			رمز عبور و نام کاربری شما صحیح نمی باشد
-		</div>
-		<?php }?>
+		<?php if ($msg = $this->session->flashdata('err')): ?>
+			<div class="alert alert-warning" style="text-align: center;">
+				<?php echo htmlspecialchars($msg, ENT_QUOTES, 'UTF-8'); ?>
+			</div>
+		<?php endif; ?>
 		<!--login-form-->
 		<div id="login" style=" margin: 0 auto;padding: 20px; width: 500px;
 		height: auto;box-shadow: 0px 2px 15px 2px #ccc; border-radius: 11px;">
@@ -70,7 +70,7 @@
 
 	</div>
 </div>
-<script src="<?php echo base_url()?>assets/js/login.js?v=1.1.1"></script>
+<!--<script src="--><?php //echo base_url()?><!--assets/js/login.js?v=1.1.1"></script>-->
 <script>
 	$(document).ready(function () {
 		$('#btn').hide();
