@@ -15,51 +15,21 @@
 							<label for="role" class="required">نوع کاربر:</label>
 
 							<select class="form-control" id="role" name="role">
-
-								<option selected value="<?php
-								foreach ($register as $reg){
-									foreach ($role as $ro){
-										if($reg->id == $p->user_id){
-											if ($ro->id == $reg->role){
-												echo $ro->id;
-											}
-										}
-									}
-								}
-								?>">
-									<?php
-									foreach ($profile as $p){
-										foreach ($register as $reg){
-											foreach ($role as $ro){
-												if($reg->id == $p->user_id){
-													if ($reg->role == ''){
-														echo "انتخاب کنید...";
-														break;
-													} else {
-														if($ro->id == $reg->role){
-															echo $ro->name;
-														}
-													}
-												}
-											}
-										}
-									}
-									?>
-								</option>
-
 								<?php
-								foreach ($role as $ro){
-									// جلوگیری از تکرار مقدار انتخاب شده قبلی
-									// ($reg->role همان مقدار select شده قبلی است)
-									if ($ro->id == $reg->role) continue;
-									?>
-									<option value="<?php echo $ro->id; ?>"><?php echo $ro->name; ?></option>
-								<?php } ?>
+								// گرفتن نقش انتخاب شده فعلی کاربر از جدول user_roles
+								$user_role_id = isset($user_roles[0]) ? $user_roles[0]->role_id : null;
 
+								foreach ($role as $ro) { ?>
+									<option value="<?php echo $ro->id; ?>"
+											<?php echo ($ro->id == $user_role_id) ? 'selected' : ''; ?>>
+										<?php echo $ro->name; ?>
+									</option>
+								<?php } ?>
 							</select>
 
 							<?php echo form_error('role','<span style="color: red">','</span>') ?>
 						</div>
+
 
 
 						<div class="form-group">
@@ -79,7 +49,7 @@
 						<div class="form-group">
 							<label for="phone_number" class="required">شماره موبایل:</label>
 							<span style="color: red" id="ph_err"></span>
-							<input readonly autocomplete="off" id="phone_number" name="phone_number" type="text" class="form-control positive" value="<?php if (form_error('phone_number')) {echo set_value('phone_number');}else{echo $p->phone_number;}?>" placeholder="شماره موبایل">
+							<input readonly autocomplete="off" id="phone_number" name="phone_number" type="text" class="form-control positive" value="<?php if (form_error('phone_number')) {echo set_value('phone_number');}else{echo $register[0]->phone_number;}?>" placeholder="شماره موبایل">
 							<?php echo form_error('phone_number','<span style="color: red">','</span>') ?>
 						</div>
 

@@ -149,9 +149,6 @@ class Admin extends CI_Controller
 		return redirect('admin');
 	}
 
-
-
-
 	// 🚪 خروج از حساب
 	public function logout()
 	{
@@ -679,7 +676,8 @@ class Admin extends CI_Controller
 	{
 		$data['title']='ویرایش کاربر';
 		$data['profile']=$this->base_model->get_data('profile','*',array('user_id'=>$id));
-		$data['role']=$this->base_model->get_data('role','*');
+		$data['role']=$this->base_model->get_data('roles','*');
+		$data['user_roles']=$this->base_model->get_data('user_roles','*');
 		$data['province']=$this->base_model->get_data('province','*');
 		$data['city']=$this->base_model->get_data('city','*');
 		$data['register']=$this->base_model-> get_data('register','*',array('id'=>$id));
@@ -692,114 +690,177 @@ class Admin extends CI_Controller
 
 	public function edit_u($id)
 	{
-		if ($this->input->post()) {
-			$this->load->library('form_validation');
-			$this->load->helper('form');
+		if (!$this->input->post()) return;
 
-		// پیام‌ها و قوانین ولیدیشن
+		$this->load->library('form_validation');
+		$this->load->helper('form');
+
+		// پیام‌ها
 		$this->form_validation->set_message('required', 'فیلد الزامی است');
 		$this->form_validation->set_message('min_length', '%s باید حداقل %d کاراکتر داشته باشد');
 		$this->form_validation->set_message('max_length', '%s باید حداکثر %d کاراکتر داشته باشد');
-		$this->form_validation->set_message('regex_match', 'فقط از حروف استفاده کنید');
-		$this->form_validation->set_message('_phoneRegex', 'شماره وارد شده نادرست است');
-//		$this->form_validation->set_message('_phoneExists', 'شماره وارد شده تکراری است');
 		$this->form_validation->set_message('_phoneRegex2', 'شماره وارد شده نادرست است');
 		$this->form_validation->set_message('_postal_check', 'در صورت ورود کدپستی، باید 10 رقم باشد');
 
+		// قوانین
 		$this->form_validation->set_rules('role', 'نوع کاربر', 'required');
-		$this->form_validation->set_rules('password', 'رمز عبور', 'required|min_length[8]|max_length[25]');
-//		$this->form_validation->set_rules('phone_number', 'شماره موبایل', 'required|min_length[10]|max_length[11]|callback__phoneRegex|callback__phoneExists');
-		$this->form_validation->set_rules('phone_number1', 'شماره موبایل ضروری', 'callback__phoneRegex2');
+		$this->form_validation->set_rules('phone_number1', 'شماره موبایل ضروری', 'required|callback__phoneRegex2');
 		$this->form_validation->set_rules('postal_code', 'کد پستی', 'callback__postal_check');
+		$this->form_validation->set_rules('password', 'رمز عبور', 'min_length[8]|max_length[25]');
 
 
-			if (!$this->form_validation->run()) {
-
-			date_default_timezone_set("Asia/Tehran");
-			$modified_time = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-
-			// --- new data ---
-			$new_profile = [
-				'name' => $this->input->post('name'),
-				'family' => $this->input->post('family'),
-				'reciever_phone_number' => $this->input->post('phone_number1'),
-				'ostan' => $this->input->post('ostan'),
-				'city' => $this->input->post('city'),
-				'address' => $this->input->post('address'),
-				'postal_code' => $this->input->post('postal_code'),
-				'modified' => $modified_time
-			];
-
-			$new_register = [
-				'role' => $this->input->post('role'),
-				'modified' => $modified_time
-			];
-
-			// --- old data ---
-			$old_profile = (array)$this->base_model->get_data('profile', '*', ['user_id' => $id])[0];
-			$old_register = (array)$this->base_model->get_data('register', '*', ['id' => $id])[0];
-
-			// --- diffs ---
-			$diff_p_old = $diff_p_new = [];
-			foreach ($new_profile as $k => $v) {
-				if ((string)$old_profile[$k] !== (string)$v) {
-					$diff_p_old[$k] = $old_profile[$k];
-					$diff_p_new[$k] = $v;
-				}
-			}
-
-			$diff_r_old = $diff_r_new = [];
-			foreach ($new_register as $k => $v) {
-				if ((string)$old_register[$k] !== (string)$v) {
-					$diff_r_old[$k] = $old_register[$k];
-					$diff_r_new[$k] = $v;
-				}
-			}
-
-			// --- update DB ---
-			$this->base_model->update_data('profile', $new_profile, ['user_id' => $id]);
-			$this->base_model->update_data('register', $new_register, ['id' => $id]);
-
-			$group_id = uniqid('grp_', true);
-			$operationInfo = "ویرایش اطلاعات کاربر";
-
-				$phone_number = $this->base_model->get_data('register', 'phone_number', ['id' => $id])[0]->phone_number;
-
-			// --- logs ---
-			if (!empty($diff_r_old)) {
-				$this->base_model->add_log(
-					'register',
-					$id,
-					'update',
-					$diff_r_old,
-					$diff_r_new,
-					' ویرایش کاربر با شماره موبایل: ' . $phone_number,
-					$group_id,
-					$operationInfo
-				);
-			}
-
-			if (!empty($diff_p_old)) {
-				$this->base_model->add_log(
-					'profile',
-					$id,
-					'update',
-					$diff_p_old,
-					$diff_p_new,
-					' ویرایش کاربر با شماره موبایل: ' . $phone_number,
-					$group_id,
-					$operationInfo
-				);
-			}
-
-			redirect('admin/edit_user/'.$id);
-
-			}
+		if (!$this->form_validation->run()) {
+			return $this->edit_user($id);
 		}
+
+		// زمان
+		date_default_timezone_set("Asia/Tehran");
+		$modified_time = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+
+		// داده‌های جدید
+		$new_profile = [
+			'name' => $this->input->post('name'),
+			'family' => $this->input->post('family'),
+			'reciever_phone_number' => $this->input->post('phone_number1'),
+			'ostan' => $this->input->post('ostan'),
+			'city' => $this->input->post('city'),
+			'address' => $this->input->post('address'),
+			'postal_code' => $this->input->post('postal_code'),
+			'modified' => $modified_time
+		];
+
+		$new_register = [
+			'modified' => $modified_time,
+			'phone_number' => $this->input->post('phone_number1')
+		];
+
+		// رمز فقط اگر وارد شده باشد
+		if ($this->input->post('password') != '') {
+			$new_register['password'] = $this->input->post('password');
+		}
+
+		$new_user_roles = [
+			'role_id' => $this->input->post('role'),
+			'modified' => $modified_time
+		];
+
+		// آپدیت دیتابیس
+		$this->base_model->update_data('profile', $new_profile, ['user_id' => $id]);
+		$this->base_model->update_data('register', $new_register, ['id' => $id]);
+		$this->base_model->update_data('user_roles', ['role_id' => $this->input->post('role')], ['user_id' => $id]);
+
+		redirect('admin/edit_user/'.$id);
 	}
 
 
 
+//	public function edit_u($id)
+//	{
+//		if ($this->input->post()) {
+//			$this->load->library('form_validation');
+//			$this->load->helper('form');
+//
+//			// پیام‌ها و قوانین ولیدیشن
+//			$this->form_validation->set_message('required', 'فیلد الزامی است');
+//			$this->form_validation->set_message('min_length', '%s باید حداقل %d کاراکتر داشته باشد');
+//			$this->form_validation->set_message('max_length', '%s باید حداکثر %d کاراکتر داشته باشد');
+//			$this->form_validation->set_message('regex_match', 'فقط از حروف استفاده کنید');
+//			$this->form_validation->set_message('_phoneRegex', 'شماره وارد شده نادرست است');
+////		$this->form_validation->set_message('_phoneExists', 'شماره وارد شده تکراری است');
+//			$this->form_validation->set_message('_phoneRegex2', 'شماره وارد شده نادرست است');
+//			$this->form_validation->set_message('_postal_check', 'در صورت ورود کدپستی، باید 10 رقم باشد');
+//
+//			$this->form_validation->set_rules('role', 'نوع کاربر', 'required');
+//			$this->form_validation->set_rules('password', 'رمز عبور', 'required|min_length[8]|max_length[25]');
+////		$this->form_validation->set_rules('phone_number', 'شماره موبایل', 'required|min_length[10]|max_length[11]|callback__phoneRegex|callback__phoneExists');
+//			$this->form_validation->set_rules('phone_number1', 'شماره موبایل ضروری', 'callback__phoneRegex2');
+//			$this->form_validation->set_rules('postal_code', 'کد پستی', 'callback__postal_check');
+//
+//
+//			if (!$this->form_validation->run()) {
+//
+//				date_default_timezone_set("Asia/Tehran");
+//				$modified_time = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+//
+//				// --- new data ---
+//				$new_profile = [
+//					'name' => $this->input->post('name'),
+//					'family' => $this->input->post('family'),
+//					'reciever_phone_number' => $this->input->post('phone_number1'),
+//					'ostan' => $this->input->post('ostan'),
+//					'city' => $this->input->post('city'),
+//					'address' => $this->input->post('address'),
+//					'postal_code' => $this->input->post('postal_code'),
+//					'modified' => $modified_time
+//				];
+//
+//				$new_register = [
+//					'role' => $this->input->post('role'),
+//					'modified' => $modified_time
+//				];
+//
+//				// --- old data ---
+//				$old_profile = (array)$this->base_model->get_data('profile', '*', ['user_id' => $id])[0];
+//				$old_register = (array)$this->base_model->get_data('register', '*', ['id' => $id])[0];
+//
+//				// --- diffs ---
+//				$diff_p_old = $diff_p_new = [];
+//				foreach ($new_profile as $k => $v) {
+//					if ((string)$old_profile[$k] !== (string)$v) {
+//						$diff_p_old[$k] = $old_profile[$k];
+//						$diff_p_new[$k] = $v;
+//					}
+//				}
+//
+//				$diff_r_old = $diff_r_new = [];
+//				foreach ($new_register as $k => $v) {
+//					if ((string)$old_register[$k] !== (string)$v) {
+//						$diff_r_old[$k] = $old_register[$k];
+//						$diff_r_new[$k] = $v;
+//					}
+//				}
+//
+//				// --- update DB ---
+//				$this->base_model->update_data('profile', $new_profile, ['user_id' => $id]);
+//				$this->base_model->update_data('register', $new_register, ['id' => $id]);
+//
+//				$group_id = uniqid('grp_', true);
+//				$operationInfo = "ویرایش اطلاعات کاربر";
+//
+//				$phone_number = $this->base_model->get_data('register', 'phone_number', ['id' => $id])[0]->phone_number;
+//
+//				// --- logs ---
+//				if (!empty($diff_r_old)) {
+//					$this->base_model->add_log(
+//						'register',
+//						$id,
+//						'update',
+//						$diff_r_old,
+//						$diff_r_new,
+//						' ویرایش کاربر با شماره موبایل: ' . $phone_number,
+//						$group_id,
+//						$operationInfo
+//					);
+//				}
+//
+//				if (!empty($diff_p_old)) {
+//					$this->base_model->add_log(
+//						'profile',
+//						$id,
+//						'update',
+//						$diff_p_old,
+//						$diff_p_new,
+//						' ویرایش کاربر با شماره موبایل: ' . $phone_number,
+//						$group_id,
+//						$operationInfo
+//					);
+//				}
+//
+//				redirect('admin/edit_user/'.$id);
+//
+//			}
+//		}
+//	}
 
 
 
@@ -808,23 +869,11 @@ class Admin extends CI_Controller
 
 
 
-	public function delete_users_checked() {
-		if (isset($_POST['ids1']) && isset($_POST['ids2'])) {
-			$ids1 = explode(',', $_POST['ids1']);
-			$ids2 = explode(',', $_POST['ids2']);
 
-			$results = $this->base_model->delete_rows_by_ids($ids1,'register');
-			$results2 = $this->base_model->delete_rows_by_ids($ids2,'profile');
 
-			if ($results === TRUE && $results2 === TRUE) {
-				echo '<span style="color:green;">row(s) successfully deleted</span>';
-			} else {
-				echo '<span style="color:red;">Something went wrong during row deletion</span>';
-			}
-		} else {
-			echo '<span style="color:red;">You must select at least one row for deletion</span>';
-		}
-	}
+
+
+
 
 
 
