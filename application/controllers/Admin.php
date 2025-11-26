@@ -704,9 +704,8 @@ class Admin extends CI_Controller
 
 		// قوانین
 		$this->form_validation->set_rules('role', 'نوع کاربر', 'required');
-		$this->form_validation->set_rules('phone_number1', 'شماره موبایل ضروری', 'required|callback__phoneRegex2');
+		$this->form_validation->set_rules('phone_number1', 'شماره موبایل ضروری', 'callback__phoneRegex2');
 		$this->form_validation->set_rules('postal_code', 'کد پستی', 'callback__postal_check');
-		$this->form_validation->set_rules('password', 'رمز عبور', 'min_length[8]|max_length[25]');
 
 
 		if (!$this->form_validation->run()) {
@@ -731,13 +730,8 @@ class Admin extends CI_Controller
 
 		$new_register = [
 			'modified' => $modified_time,
-			'phone_number' => $this->input->post('phone_number1')
 		];
 
-		// رمز فقط اگر وارد شده باشد
-		if ($this->input->post('password') != '') {
-			$new_register['password'] = $this->input->post('password');
-		}
 
 		$new_user_roles = [
 			'role_id' => $this->input->post('role'),
