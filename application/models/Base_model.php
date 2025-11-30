@@ -98,7 +98,6 @@ class base_model extends CI_Model
 	}
 
 
-
 	public function update_data($table, $data, $where = NULL, $batch = FALSE, $batch_index = NULL)
 	{
 		if (empty($table) || empty($data)) {
@@ -123,7 +122,6 @@ class base_model extends CI_Model
 			return FALSE;
 		}
 	}
-
 
 	
 	public function delete_data($table, $where = NULL, $where_in = NULL)
@@ -154,7 +152,6 @@ class base_model extends CI_Model
 			return FALSE;
 		}
 	}
-
 
 
 	public function datatable($table, $columns, $post_data, $select = '*', $join = NULL, $where = NULL, $order_by_default = NULL)
@@ -261,6 +258,43 @@ class base_model extends CI_Model
 			return false;
 		}
 	}
+
+
+	public function has_permission($user_id, $permission_name)
+	{
+		$sql = "
+            SELECT p.id
+            FROM user_roles ur
+            JOIN role_permissions rp ON ur.role_id = rp.role_id
+            JOIN permissions p ON rp.permission_id = p.id
+            WHERE ur.user_id = ? 
+              AND p.name = ? 
+              AND ur.isActive = 1 
+              AND rp.isActive = 1 
+              AND p.isActive = 1
+            LIMIT 1
+        ";
+		$query = $this->db->query($sql, [$user_id, $permission_name]);
+		return $query->num_rows() > 0;
+	}
+
+
+	public function get_user_permissions($user_id)
+	{
+		$this->db->select('p.name')
+			->from('user_roles ur')
+			->join('role_permissions rp', 'ur.role_id = rp.role_id')
+			->join('permissions p', 'rp.permission_id = p.id')
+			->where([
+				'ur.user_id' => $user_id,
+				'ur.isActive' => 1,
+				'rp.isActive' => 1,
+				'p.isActive' => 1
+			]);
+		$result = $this->db->get()->result_array();
+		return array_column($result, 'name');
+	}
+
 
 
 

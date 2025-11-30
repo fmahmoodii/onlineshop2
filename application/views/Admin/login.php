@@ -29,13 +29,13 @@
 
 			<form action="<?php echo base_url()?>admin/login"  method="post" style=" margin-top: 50px;  ">
 				<label style="color: #4f4f4f ">شناسه کاربری:</label>
-				<input type="text" min="6" maxlength="6" name="user_name" id="user_name" class="form-control  no-zoom"
+				<input type="text" min="11" maxlength="11" name="phone_number" id="phone_number" class="form-control  no-zoom"
 					   autocomplete="off" required="required" title="شناسه کاربری"
 					   oninvalid="setCustomValidity('شناسه کاربری خود را وارد کنید')"
 					   onchange="try{setCustomValidity('')}catch(e){}"
 					   placeholder="شناسه کاربری"><br>
 				<label style="color: #4f4f4f ">رمز عبور:</label>
-				<input type="password" min="6" maxlength="6" name="password" id="password" class="form-control  no-zoom" autocomplete="off"
+				<input type="password" min="8" maxlength="25" name="password" id="password" class="form-control  no-zoom" autocomplete="off"
 					   required="required" oninvalid="setCustomValidity('رمز عبور')"
 					   onchange="try{setCustomValidity('')}catch(e){}" title='رمز عبور '
 					   placeholder="رمز عبور">

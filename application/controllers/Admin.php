@@ -65,20 +65,19 @@ class Admin extends CI_Controller
 			return redirect('admin/login_page');
 		}
 
-		$username = $this->input->post('user_name', true);
+		$username = $this->input->post('phone_number', true);
 		$password = $this->input->post('password', true);
 
 		$group_id      = uniqid('grp_', true);
 		$operationInfo = "ورود ادمین";
 
-		// دریافت رکورد فقط بر اساس نام کاربری
-		$admin = $this->base_model->get_data('admin', '*', [
-			'user_name' => $username
+
+		// 1) دریافت کاربر
+		$users = $this->base_model->get_data('users', '*', [
+			'phone_number' => $username
 		]);
 
-		// اگر نام کاربری اشتباه باشد
-		if (empty($admin)) {
-
+		if (empty($users)) {
 			$this->base_model->add_log(
 				'admin',
 				null,
@@ -94,14 +93,16 @@ class Admin extends CI_Controller
 			return redirect('admin/login_page');
 		}
 
-		$admin = $admin[0];
+		// آرایه به آبجکت تبدیل شود
+		$users = $users[0];
 
-		// بررسی رمز عبور هش‌شده
-		if (!password_verify($password, $admin->password)) {
+
+		// 2) بررسی رمز عبور
+		if (!password_verify($password, $users->password)) {
 
 			$this->base_model->add_log(
 				'admin',
-				$admin->id,
+				$users->id,
 				'login_failed_wrong_password',
 				null,
 				null,
@@ -114,12 +115,13 @@ class Admin extends CI_Controller
 			return redirect('admin/login_page');
 		}
 
-		// بررسی فعال بودن ادمین
-		if ($admin->isActive != 1) {
+
+		// 3) بررسی فعال بودن
+		if ($users->isActive != 1) {
 
 			$this->base_model->add_log(
 				'admin',
-				$admin->id,
+				$users->id,
 				'login_inactive_user',
 				null,
 				null,
@@ -132,12 +134,32 @@ class Admin extends CI_Controller
 			return redirect('admin/login_page');
 		}
 
-		// ورود موفق
-		$this->session->set_userdata('id', $admin->id);
+
+		// 4) بررسی پرمیشن ورود به پنل
+		if (!$this->base_model->has_permission($users->id, 'دسترسی کامل')) {
+
+			$this->base_model->add_log(
+				'admin',
+				$users->id,
+				'login_no_admin_permission',
+				null,
+				null,
+				'تلاش برای ورود کاربر بدون مجوز: ' . $username,
+				$group_id,
+				$operationInfo
+			);
+
+			$this->session->set_flashdata('err', 'شما دسترسی ورود به پنل مدیریت را ندارید');
+			return redirect('admin/login_page');
+		}
+
+
+		// 5) ورود موفق
+		$this->session->set_userdata('id', $users->id);
 
 		$this->base_model->add_log(
 			'admin',
-			$admin->id,
+			$users->id,
 			'login_success',
 			null,
 			null,
@@ -149,40 +171,44 @@ class Admin extends CI_Controller
 		return redirect('admin');
 	}
 
+
 	// 🚪 خروج از حساب
 	public function logout()
 	{
-		$user_id = isset($this->session->userdata['id']) ? $this->session->userdata['id'] : null;
+		// دریافت ID از سشن
+		$user_id = $this->session->userdata('id');
 
 		if ($user_id) {
-			// گرفتن یوزرنیم
-			$admin = $this->base_model->get_data('admin', 'user_name', ['id' => $user_id]);
-			$username = isset($admin[0]) ? $admin[0]->user_name : null;
+
+			// گرفتن اطلاعات کاربر
+			$user = $this->base_model->get_data('users', 'phone_number', ['id' => $user_id]);
+			$username = isset($user[0]) ? $user[0]->phone_number : 'نامشخص';
 
 			$group_id = uniqid('grp_', true);
 
+			// ثبت لاگ خروج
 			$this->base_model->add_log(
 				'admin',                        // entity_type
-				$user_id,                        // entity_id
-				'logout',                        // action
-				null,                             // old_value
-				null,                             // new_value
-				"خروج موفق از پنل ادمین با نام کاربری: $username", // details
-				$group_id,                        // group_id
-				'خروج ادمین',                     // operation_info
-				null,
-				null,
-				null
+				$user_id,                       // entity_id
+				'logout',                       // action
+				null,                           // old_value
+				null,                           // new_value
+				"خروج موفق از پنل ادمین توسط: $username", // details
+				$group_id,                      // group_id
+				'خروج ادمین'                    // operation_info
 			);
 		}
 
+		// حذف تمام سشن ها
 		$this->session->sess_destroy();
-		redirect('admin/login_page');
+
+		return redirect('admin/login_page');
 	}
+
 
 	public function registered_users(){
 		$data['profile']=$this->base_model->get_data('profile','*');
-		$data['register']=$this->base_model->get_data('register','*');
+		$data['users']=$this->base_model->get_data('users','*');
 		$data['roles']=$this->base_model->get_data('roles','*');
 		$data['user_roles']=$this->base_model->get_data('user_roles','*');
 		$data['title']='کاربران';
@@ -198,54 +224,94 @@ class Admin extends CI_Controller
 			'roles.name',
 			'profile.name',
 			'profile.family',
-			'register.phone_number',
-			'register.created',
-			'register.modified',
+			'users.phone_number',
+			'users.created',
+			'users.modified',
 			null, null, null, null
 		];
 
 		$join = [
-			'profile' => 'register.id = profile.user_id',
-			'user_roles' => 'register.id = user_roles.user_id',
-			'roles' => 'user_roles.role_id = roles.id'
+			'profile'     => 'users.id = profile.user_id',
+			'user_roles'  => 'users.id = user_roles.user_id',
+			'roles'       => 'user_roles.role_id = roles.id'
 		];
 
-		$table = 'register';
-		$select = 'profile.id, profile.user_id, register.id as user_id, roles.name as role, profile.name, profile.family, register.phone_number, register.created, register.modified, register.isActive';
+		$table  = 'users';
+		$select = '
+        profile.id AS profile_id,
+        users.id AS user_id,
+        roles.role_name AS role,
+        profile.name,
+        profile.family,
+        users.phone_number,
+        users.created,
+        users.modified,
+        users.isActive
+    ';
 
-		$result = $this->base_model->datatable($table, $columns, $_POST, $select, $join, null, ['register.id' => 'DESC']);
+		$result = $this->base_model->datatable(
+			$table,
+			$columns,
+			$_POST,
+			$select,
+			$join,
+			null,
+			['users.id' => 'DESC']
+		);
 
 		$data = [];
-		foreach($result['data'] as $row) {
+		foreach ($result['data'] as $row) {
+
 			$sub_array = [];
-			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check" user_id="'.htmlspecialchars($row->user_id).'" id_prof="'.htmlspecialchars($row->id).'">';
+
+			// Checkbox
+			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check"
+                        user_id="'.htmlspecialchars($row->user_id).'"
+                        id_prof="'.htmlspecialchars($row->profile_id).'">';
+
+			// Role
 			$sub_array[] = htmlspecialchars($row->role);
+
+			// Profile fields
 			$sub_array[] = htmlspecialchars($row->name);
 			$sub_array[] = htmlspecialchars($row->family);
+
+			// Phone
 			$sub_array[] = htmlspecialchars($row->phone_number);
+
+			// Dates
 			$sub_array[] = htmlspecialchars($row->created);
 			$sub_array[] = htmlspecialchars($row->modified);
 
+			// Active / Deactive button
 			$sub_array[] = ($row->isActive == 0)
-				? '<button type="button" id="active" user_id="'.$row->user_id.'" id_prof="'.$row->id.'" class="btn btn-primary btn-xs">فعالسازی</button>'
-				: '<button type="button" id="deactive" user_id="'.$row->user_id.'" id_prof="'.$row->id.'" class="btn btn-secondry btn-xs">غیرفعالسازی</button>';
+				? '<button type="button" id="active" user_id="'.$row->user_id.'" id_prof="'.$row->profile_id.'" class="btn btn-primary btn-xs">فعالسازی</button>'
+				: '<button type="button" id="deactive" user_id="'.$row->user_id.'" id_prof="'.$row->profile_id.'" class="btn btn-secondry btn-xs">غیرفعالسازی</button>';
 
-			$sub_array[] = '<button type="button" id="reset" user_id="'.$row->user_id.'" id_prof="'.$row->id.'" class="btn btn-info"><i class="fa fa-key"></i></button>';
-			$sub_array[] = '<a href="'.base_url('admin/edit_user/'.$row->user_id).'"><button class="btn btn-warning"><i class="fa fa-edit"></i></button></a>';
-			$sub_array[] = '<button id="delete" user_id="'.$row->user_id.'" id_prof="'.$row->id.'" class="btn btn-danger"><i class="fa fa-trash"></i></button>';
+			// Reset password
+			$sub_array[] = '<button type="button" id="reset" user_id="'.$row->user_id.'" id_prof="'.$row->profile_id.'" class="btn btn-info"><i class="fa fa-key"></i></button>';
+
+			// Edit
+			$sub_array[] = '<a href="'.base_url('admin/edit_user/'.$row->user_id).'">
+                            <button class="btn btn-warning"><i class="fa fa-edit"></i></button>
+                        </a>';
+
+			// Delete
+			$sub_array[] = '<button id="delete" user_id="'.$row->user_id.'" id_prof="'.$row->profile_id.'" class="btn btn-danger"><i class="fa fa-trash"></i></button>';
 
 			$data[] = $sub_array;
 		}
 
 		$output = [
-			"draw" => intval($_POST["draw"]),
-			"recordsTotal" => $result['recordsTotal'],
+			"draw"            => intval($_POST["draw"]),
+			"recordsTotal"    => $result['recordsTotal'],
 			"recordsFiltered" => $result['recordsFiltered'],
-			"data" => $data
+			"data"            => $data
 		];
 
 		echo json_encode($output);
 	}
+
 
 
 	public function delete_user()
