@@ -22,7 +22,7 @@
 								foreach ($role as $ro) { ?>
 									<option value="<?php echo $ro->id; ?>"
 											<?php echo ($ro->id == $user_role_id) ? 'selected' : ''; ?>>
-										<?php echo $ro->name; ?>
+										<?php echo $ro->role_name; ?>
 									</option>
 								<?php } ?>
 							</select>
@@ -49,7 +49,7 @@
 						<div class="form-group">
 							<label for="phone_number" class="required">شماره موبایل:</label>
 							<span style="color: red" id="ph_err"></span>
-							<input readonly autocomplete="off" id="phone_number" name="phone_number" type="text" class="form-control positive" value="<?php if (form_error('phone_number')) {echo set_value('phone_number');}else{echo $register[0]->phone_number;}?>" placeholder="شماره موبایل">
+							<input readonly autocomplete="off" id="phone_number" name="phone_number" type="text" class="form-control positive" value="<?php if (form_error('phone_number')) {echo set_value('phone_number');}else{echo $users[0]->phone_number;}?>" placeholder="شماره موبایل">
 							<?php echo form_error('phone_number','<span style="color: red">','</span>') ?>
 						</div>
 

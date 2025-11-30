@@ -596,7 +596,6 @@ class Admin extends CI_Controller
 		echo $output;
 	}
 
-
     public function check_phone()
     {
         if ($this->input->post('phone_number')) {
@@ -740,7 +739,7 @@ class Admin extends CI_Controller
 		$data['user_roles']=$this->base_model->get_data('user_roles','*');
 		$data['province']=$this->base_model->get_data('province','*');
 		$data['city']=$this->base_model->get_data('city','*');
-		$data['register']=$this->base_model-> get_data('register','*',array('id'=>$id));
+		$data['users']=$this->base_model-> get_data('users','*',array('id'=>$id));
 
 
 		$this->load->view('admin/layout/header',$data);
@@ -800,7 +799,7 @@ class Admin extends CI_Controller
 
 		// آپدیت دیتابیس
 		$this->base_model->update_data('profile', $new_profile, ['user_id' => $id]);
-		$this->base_model->update_data('register', $new_register, ['id' => $id]);
+		$this->base_model->update_data('users', $new_register, ['id' => $id]);
 		$this->base_model->update_data('user_roles', ['role_id' => $this->input->post('role')], ['user_id' => $id]);
 
 		redirect('admin/edit_user/'.$id);
