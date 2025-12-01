@@ -16,13 +16,11 @@
 
 							<select class="form-control" id="role" name="role">
 								<?php
-								// گرفتن نقش انتخاب شده فعلی کاربر از جدول user_roles
-								$user_role_id = isset($user_roles[0]) ? $user_roles[0]->role_id : null;
 
-								foreach ($role as $ro) { ?>
+								foreach ($roles as $ro) { ?>
 									<option value="<?php echo $ro->id; ?>"
-											<?php echo ($ro->id == $user_role_id) ? 'selected' : ''; ?>>
-										<?php echo $ro->role_name; ?>
+											<?php echo ($ro->id == $user_data[0]->role_id) ? 'selected' : ''; ?>>
+										<?= htmlspecialchars($ro->role_name) ?>
 									</option>
 								<?php } ?>
 							</select>

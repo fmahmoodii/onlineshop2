@@ -618,9 +618,8 @@ class Admin extends CI_Controller
     public function insert_user()
 	{
 		$data['profile']=$this->base_model->get_data('profile','*');
-		$data['register']=$this->base_model->get_data('register','*');
-		$data['role']=$this->base_model->get_data('roles','*');
-		$data['user_roles']=$this->base_model->get_data('user_roles','*');
+		$data['users']=$this->base_model->get_data('register','*');
+		$data['roles']=$this->base_model->get_data('roles','*');
 		$data['province']=$this->base_model->get_data('province','*');
 		$data['city']=$this->base_model->get_data('city','*');
 
@@ -735,11 +734,27 @@ class Admin extends CI_Controller
 	{
 		$data['title']='ویرایش کاربر';
 		$data['profile']=$this->base_model->get_data('profile','*',array('user_id'=>$id));
-		$data['role']=$this->base_model->get_data('roles','*');
+		$data['roles']=$this->base_model->get_data('roles','*');
 		$data['user_roles']=$this->base_model->get_data('user_roles','*');
 		$data['province']=$this->base_model->get_data('province','*');
 		$data['city']=$this->base_model->get_data('city','*');
 		$data['users']=$this->base_model-> get_data('users','*',array('id'=>$id));
+		$data['user_data'] = $this->base_model->get_data(
+			'users u',
+			'u.id as user_id, r.id as role_id, r.role_name',
+			['u.id' => $id],
+			NULL,
+			NULL,
+			NULL,
+			NULL,
+			NULL,
+			NULL,
+			NULL,
+			[
+				'user_roles ur' => 'ur.user_id = u.id',
+				'roles r' => 'r.id = ur.role_id'
+			]
+		);
 
 
 		$this->load->view('admin/layout/header',$data);
@@ -766,7 +781,6 @@ class Admin extends CI_Controller
 		$this->form_validation->set_rules('phone_number1', 'شماره موبایل ضروری', 'callback__phoneRegex2');
 		$this->form_validation->set_rules('postal_code', 'کد پستی', 'callback__postal_check');
 
-
 		if (!$this->form_validation->run()) {
 			return $this->edit_user($id);
 		}
@@ -791,16 +805,55 @@ class Admin extends CI_Controller
 			'modified' => $modified_time,
 		];
 
-
 		$new_user_roles = [
 			'role_id' => $this->input->post('role'),
 			'modified' => $modified_time
 		];
 
-		// آپدیت دیتابیس
+		// --- داده‌های قبلی برای لاگ ---
+		$old_profile = (array)$this->base_model->get_data('profile', '*', ['user_id' => $id])[0];
+		$old_register = (array)$this->base_model->get_data('users', '*', ['id' => $id])[0];
+		$old_user_roles = (array)$this->base_model->get_data('user_roles', '*', ['user_id' => $id])[0];
+
+		$group_id = uniqid('grp_', true);
+		$phone_number = $old_register['phone_number'];
+
+		// --- لاگ پروفایل ---
+		$diff_p_old = $diff_p_new = [];
+		foreach ($new_profile as $k => $v) {
+			if ((string)$old_profile[$k] !== (string)$v) {
+				$diff_p_old[$k] = $old_profile[$k];
+				$diff_p_new[$k] = $v;
+			}
+		}
+		if (!empty($diff_p_old)) {
+			$this->base_model->add_log('profile', $id, 'update', $diff_p_old, $diff_p_new, 'ویرایش کاربر با شماره موبایل: ' . $phone_number, $group_id, 'ویرایش اطلاعات کاربر');
+		}
+
+		// --- لاگ کاربران ---
+		$diff_r_old = $diff_r_new = [];
+		foreach ($new_register as $k => $v) {
+			if ((string)$old_register[$k] !== (string)$v) {
+				$diff_r_old[$k] = $old_register[$k];
+				$diff_r_new[$k] = $v;
+			}
+		}
+		if (!empty($diff_r_old)) {
+			$this->base_model->add_log('users', $id, 'update', $diff_r_old, $diff_r_new, 'ویرایش کاربر با شماره موبایل: ' . $phone_number, $group_id, 'ویرایش اطلاعات کاربر');
+		}
+
+		// --- لاگ نقش کاربر ---
+		$diff_ur_old = $diff_ur_new = [];
+		if ((string)$old_user_roles['role_id'] !== (string)$new_user_roles['role_id']) {
+			$diff_ur_old['role_id'] = $old_user_roles['role_id'];
+			$diff_ur_new['role_id'] = $new_user_roles['role_id'];
+			$this->base_model->add_log('user_roles', $id, 'update', $diff_ur_old, $diff_ur_new, 'تغییر نقش کاربر با شماره موبایل: ' . $phone_number, $group_id, 'ویرایش نقش کاربر');
+		}
+
+		// --- آپدیت دیتابیس ---
 		$this->base_model->update_data('profile', $new_profile, ['user_id' => $id]);
 		$this->base_model->update_data('users', $new_register, ['id' => $id]);
-		$this->base_model->update_data('user_roles', ['role_id' => $this->input->post('role')], ['user_id' => $id]);
+		$this->base_model->update_data('user_roles', $new_user_roles, ['user_id' => $id]);
 
 		redirect('admin/edit_user/'.$id);
 	}
