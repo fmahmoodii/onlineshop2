@@ -21,6 +21,36 @@ class Admin extends CI_Controller
 	}
 	//<<--------------- end date_shamsi_ghamari ---------------->>
 
+	protected function check_permission($permission_name, $table_name)
+	{
+		$user_id = $this->session->userdata('id');
+		$group_id = uniqid('grp_', true);
+		$operationInfo = "بررسی دسترسی";
+
+		if (!$user_id) {
+			$this->session->set_flashdata('err', 'ابتدا وارد سیستم شوید');
+			redirect('admin/login_page');
+			exit;
+		}
+
+		if (!$this->base_model->has_permission($user_id, $permission_name, $table_name)) {
+			// ثبت لاگ
+			$this->base_model->add_log(
+				$table_name,
+				$user_id,
+				'permission_denied',
+				null,
+				null,
+				"کاربر اجازه $permission_name روی جدول $table_name را ندارد",
+				$group_id,
+				$operationInfo
+			);
+
+			$this->session->set_flashdata('err', 'شما اجازه انجام این عملیات را ندارید');
+			redirect('admin');
+			exit;
+		}
+	}
 
 	// 📊 صفحه‌ی اصلی ادمین (داشبورد)
 	public function index()
@@ -312,8 +342,6 @@ class Admin extends CI_Controller
 		echo json_encode($output);
 	}
 
-
-
 	public function delete_user()
 	{
 		if ($_POST && isset($_POST['user_ids']) && is_array($_POST['user_ids'])) {
@@ -322,9 +350,9 @@ class Admin extends CI_Controller
 			$group_id = uniqid('grp_', true);
 			$operationInfo = "حذف کاربران";
 
-			// گرفتن اطلاعات قبل از حذف از جدول register
-			$register_users = $this->base_model->get_data(
-				'register',
+			// گرفتن اطلاعات قبل از حذف از جدول users
+			$users = $this->base_model->get_data(
+				'users',
 				'*',
 				null,
 				null,
@@ -342,25 +370,35 @@ class Admin extends CI_Controller
 				['user_id' => $user_ids]
 			);
 
+			// گرفتن اطلاعات قبل از حذف از جدول user_roles
+			$user_roles = $this->base_model->get_data(
+				'user_roles',
+				'*',
+				null,
+				null,
+				null,
+				['user_id' => $user_ids]
+			);
+
 			// ساخت map برای دسترسی سریع به نام و نام خانوادگی با user_id
 			$profileMap = [];
 			foreach ($profiles as $p) {
-				$profileMap[$p->user_id] = $p;  // هر user_id → رکورد profile
+				$profileMap[$p->user_id] = $p;
 			}
 
 			// حذف گروهی
 			$this->db->where_in('user_id', $user_ids)->delete('profile');
-			$this->db->where_in('id', $user_ids)->delete('register');
+			$this->db->where_in('user_id', $user_ids)->delete('user_roles');
+			$this->db->where_in('id', $user_ids)->delete('users');
 
-			// ثبت لاگ برای register + اضافه کردن name و family (در صورت وجود)
-			foreach ($register_users as $user) {
-
+			// ثبت لاگ برای users
+			foreach ($users as $user) {
 				$fullName = isset($profileMap[$user->id])
 					? $profileMap[$user->id]->name . ' ' . $profileMap[$user->id]->family
 					: 'نامشخص';
 
 				$this->base_model->add_log(
-					'register',
+					'users',
 					$user->id,
 					'delete',
 					(array)$user,
@@ -385,9 +423,26 @@ class Admin extends CI_Controller
 				);
 			}
 
+			// ثبت لاگ برای نقش‌ها
+			foreach ($user_roles as $ur) {
+				$this->base_model->add_log(
+					'user_roles',
+					$ur->id,
+					'delete',
+					(array)$ur,
+					null,
+					'حذف نقش کاربر با user_id: ' . $fullName,
+					$group_id,
+					$operationInfo
+				);
+			}
+
 			echo 1;
+		} else {
+			echo 0;
 		}
 	}
+
 
 	function toggle_user_status()
 	{
