@@ -21,9 +21,9 @@
 
 									<option value="" <?php echo set_select('role', '', true); ?>>انتخاب کنید..</option>
 
-									<?php foreach ($role as $ro){ ?>
+									<?php foreach ($roles as $ro){ ?>
 										<option value="<?php echo $ro->id?>" <?php echo set_select('role', $ro->id); ?>>
-											<?php echo $ro->name?>
+											<?php echo $ro->role_name?>
 										</option>
 									<?php } ?>
 								</select>

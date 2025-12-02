@@ -413,7 +413,7 @@ class Admin extends CI_Controller
 				$operationInfo = "تغییر وضعیت کاربران";
 
 				// گرفتن اطلاعات قبل از تغییر
-				$users_before = $this->base_model->get_data('register', '*', NULL, NULL, NULL, ['id' => $user_ids]);
+				$users_before = $this->base_model->get_data('users', '*', NULL, NULL, NULL, ['id' => $user_ids]);
 
 				foreach ($users_before as $user) {
 
@@ -423,7 +423,7 @@ class Admin extends CI_Controller
 					];
 
 					// آپدیت
-					$this->base_model->update_data('register', ['isActive' => $status], ['id' => $user->id]);
+					$this->base_model->update_data('users', ['isActive' => $status], ['id' => $user->id]);
 
 					// مقدار جدید
 					$new_value = [
@@ -437,7 +437,7 @@ class Admin extends CI_Controller
 
 					// ثبت در لاگ
 					$this->base_model->add_log(
-						'register',
+						'users',
 						$user->id,
 						'update_status',
 						$old_value,
@@ -466,7 +466,7 @@ class Admin extends CI_Controller
 
 			if ($new_pass === $re_pass) {
 				// گرفتن اطلاعات قبلی کاربر
-				$user_before = $this->base_model->get_data('register', '*', ['id' => $id]);
+				$user_before = $this->base_model->get_data('users', '*', ['id' => $id]);
 				if (!$user_before || !isset($user_before[0])) {
 					echo 0; // کاربر پیدا نشد
 					return;
@@ -478,11 +478,11 @@ class Admin extends CI_Controller
 				// هش کردن رمز جدید
 				$hashed_pass = password_hash($new_pass, PASSWORD_BCRYPT);
 
-				// آپدیت رمز در جدول register
-				$this->base_model->update_data('register', ['password' => $hashed_pass], ['id' => $id]);
+				// آپدیت رمز در جدول users
+				$this->base_model->update_data('users', ['password' => $hashed_pass], ['id' => $id]);
 
 				// گرفتن اطلاعات جدید بعد از آپدیت
-				$user_after = $this->base_model->get_data('register', '*', ['id' => $id]);
+				$user_after = $this->base_model->get_data('users', '*', ['id' => $id]);
 				$user_after = isset($user_after[0]) ? (array) $user_after[0] : [];
 
 				// آماده‌سازی داده‌های لاگ
@@ -491,7 +491,7 @@ class Admin extends CI_Controller
 
 				// ثبت لاگ
 				$this->base_model->add_log(
-					'register',                         // entity_type
+					'users',                         // entity_type
 					$id,                                // entity_id
 					'update_password',                  // action
 					$old_value,                         // old_value = اطلاعات قبلی کامل
@@ -528,7 +528,7 @@ class Admin extends CI_Controller
 			return TRUE;
 		}
 
-		$existing = $this->base_model->get_data('register', '*', ['phone_number' => $phone]);
+		$existing = $this->base_model->get_data('users', '*', ['phone_number' => $phone]);
 
 		if (!empty($existing)) {
 //			$this->form_validation->set_message('_phoneExists', 'این شماره موبایل قبلاً ثبت شده است');
@@ -601,8 +601,8 @@ class Admin extends CI_Controller
         if ($this->input->post('phone_number')) {
             $phone = $this->input->post('phone_number', true);
 
-            // بررسی وجود شماره موبایل در جدول register
-            $existing = $this->base_model->get_data('register', '*', ['phone_number' => $phone]);
+            // بررسی وجود شماره موبایل در جدول users
+            $existing = $this->base_model->get_data('users', '*', ['phone_number' => $phone]);
 
             if (!empty($existing)) {
                 echo 'exists';
@@ -618,7 +618,7 @@ class Admin extends CI_Controller
     public function insert_user()
 	{
 		$data['profile']=$this->base_model->get_data('profile','*');
-		$data['users']=$this->base_model->get_data('register','*');
+		$data['users']=$this->base_model->get_data('users','*');
 		$data['roles']=$this->base_model->get_data('roles','*');
 		$data['province']=$this->base_model->get_data('province','*');
 		$data['city']=$this->base_model->get_data('city','*');
@@ -631,104 +631,96 @@ class Admin extends CI_Controller
 
 	public function add_user()
 	{
-		if ($this->input->post()) {
-			$this->load->library('form_validation');
-			$this->load->helper('form');
+		if (!$this->input->post()) return;
 
-			$phone_number = $this->input->post('phone_number', true);
+		$this->load->library('form_validation');
+		$this->load->helper('form');
 
-			// پیام‌ها و قوانین ولیدیشن
-			$this->form_validation->set_message('required', 'فیلد الزامی است');
-			$this->form_validation->set_message('min_length', '%s باید حداقل %d کاراکتر داشته باشد');
-			$this->form_validation->set_message('max_length', '%s باید حداکثر %d کاراکتر داشته باشد');
-			$this->form_validation->set_message('regex_match', 'فقط از حروف استفاده کنید');
-			$this->form_validation->set_message('_phoneRegex', 'شماره وارد شده نادرست است');
-			$this->form_validation->set_message('_phoneExists', 'شماره وارد شده تکراری است');
-			$this->form_validation->set_message('_phoneRegex2', 'شماره وارد شده نادرست است');
-			$this->form_validation->set_message('_postal_check', 'در صورت ورود کدپستی، باید 10 رقم باشد');
+		// پیام‌ها و قوانین ولیدیشن
+		$this->form_validation->set_message('required', 'فیلد الزامی است');
+		$this->form_validation->set_message('min_length', '%s باید حداقل %d کاراکتر داشته باشد');
+		$this->form_validation->set_message('max_length', '%s باید حداکثر %d کاراکتر داشته باشد');
+		$this->form_validation->set_message('_phoneRegex', 'شماره وارد شده نادرست است');
+		$this->form_validation->set_message('_phoneExists', 'شماره وارد شده تکراری است');
+		$this->form_validation->set_message('_phoneRegex2', 'شماره وارد شده نادرست است');
+		$this->form_validation->set_message('_postal_check', 'در صورت ورود کدپستی، باید 10 رقم باشد');
 
-			$this->form_validation->set_rules('role', 'نوع کاربر', 'required');
-			$this->form_validation->set_rules('password', 'رمز عبور', 'required|min_length[8]|max_length[25]');
-			$this->form_validation->set_rules('phone_number', 'شماره موبایل', 'required|min_length[10]|max_length[11]|callback__phoneRegex|callback__phoneExists');
-			$this->form_validation->set_rules('phone_number1', 'شماره موبایل ضروری', 'callback__phoneRegex2');
-			$this->form_validation->set_rules('postal_code', 'کد پستی', 'callback__postal_check');
+		$this->form_validation->set_rules('role', 'نوع کاربر', 'required');
+		$this->form_validation->set_rules('password', 'رمز عبور', 'required|min_length[8]|max_length[25]');
+		$this->form_validation->set_rules('phone_number', 'شماره موبایل', 'required|min_length[10]|max_length[11]|callback__phoneRegex|callback__phoneExists');
+		$this->form_validation->set_rules('phone_number1', 'شماره موبایل ضروری', 'callback__phoneRegex2');
+		$this->form_validation->set_rules('postal_code', 'کد پستی', 'callback__postal_check');
 
-			if ($this->form_validation->run()) {
-
-				$group_id = uniqid('grp_', true);
-				$operationInfo = "افزودن کاربر جدید";
-
-				// بررسی وجود کاربر قبلی
-				$existing_user = $this->base_model->get_data('register', '*', ['phone_number' => $phone_number]);
-				if (!empty($existing_user)) {
-					$this->base_model->add_log(
-						'register',
-						$existing_user[0]->id,
-						'add_user_failed',
-						null,
-						null,
-						'تلاش ناموفق برای افزودن کاربر با شماره موبایل: ' . $phone_number,
-						$group_id,
-						$operationInfo
-					);
-
-					$this->session->set_flashdata('err', 'کاربری با این شماره موبایل وجود دارد.');
-					redirect('admin/insert_user');
-					return;
-				}
-
-				// داده‌های جدول register
-				$data_register = [
-					'created' => date('Y-m-d H:i:s'),
-					'phone_number' => $phone_number,
-					'password' => password_hash($this->input->post('password', true), PASSWORD_DEFAULT),
-					'isActive' => 0 // کاربر تازه ایجاد شده غیر فعال است
-				];
-
-				// درج رکورد در register
-				$user_id = $this->base_model->insert_data('register', $data_register);
-
-				// داده‌های جدول profile
-				$data_profile = [
-					'user_id' => $user_id,
-					'created' => date('Y-m-d H:i:s'),
-					'name' => $this->input->post('name', true),
-					'family' => $this->input->post('family', true),
-					'reciever_phone_number' => $this->input->post('phone_number1', true),
-					'ostan' => $this->input->post('ostan', true),
-					'city' => $this->input->post('city', true),
-					'address' => $this->input->post('address', true),
-					'postal_code' => $this->input->post('postal_code', true)
-				];
-
-				$this->base_model->insert_data('profile', $data_profile);
-
-				// داده‌های جدول user_roles
-				$data_user_roles = [
-					'user_id' => $user_id,
-					'role_id' => $this->input->post('role', true),
-					'isActive' => 1,
-					'created' => date('Y-m-d H:i:s'),
-					'modified' => date('Y-m-d H:i:s')
-				];
-
-				$this->base_model->insert_data('user_roles', $data_user_roles);
-
-				// ثبت لاگ‌ها
-				$this->base_model->add_log('register', $user_id, 'add_user_success', null, (array)$data_register, 'افزودن کاربر جدید با شماره موبایل: ' . $phone_number, $group_id, $operationInfo);
-				$this->base_model->add_log('profile', $user_id, 'add_user_success', null, (array)$data_profile, 'افزودن کاربر جدید با شماره موبایل: ' . $phone_number, $group_id, $operationInfo);
-				$this->base_model->add_log('user_roles', $user_id, 'add_user_success', null, (array)$data_user_roles, 'افزودن نقش به کاربر با شماره موبایل: ' . $phone_number, $group_id, $operationInfo);
-
-				$this->session->set_flashdata('success', 'کاربر با موفقیت ایجاد شد.');
-				redirect('admin/insert_user');
-
-			} else {
-				// در صورت ولیدیشن ناموفق
-				$this->insert_user();
-			}
+		if (!$this->form_validation->run()) {
+			return $this->insert_user();
 		}
 
+		$phone_number = $this->input->post('phone_number', true);
+		$group_id = uniqid('grp_', true);
+		$operationInfo = "افزودن کاربر جدید";
+		$now = date('Y-m-d H:i:s');
+
+		// بررسی وجود کاربر قبلی
+		$existing_user = $this->base_model->get_data('users', '*', ['phone_number' => $phone_number]);
+		if (!empty($existing_user)) {
+			$this->base_model->add_log(
+				'users',
+				$existing_user[0]->id,
+				'add_user_failed',
+				null,
+				null,
+				'تلاش ناموفق برای افزودن کاربر با شماره موبایل: ' . $phone_number,
+				$group_id,
+				$operationInfo
+			);
+
+			$this->session->set_flashdata('err', 'کاربری با این شماره موبایل وجود دارد.');
+			redirect('admin/insert_user');
+			return;
+		}
+
+		// داده‌های جدول users
+		$data_users = [
+			'created' => $now,
+			'phone_number' => $phone_number,
+			'password' => password_hash($this->input->post('password', true), PASSWORD_DEFAULT),
+			'isActive' => 0 // کاربر تازه ایجاد شده غیر فعال است
+		];
+		$user_id = $this->base_model->insert_data('users', $data_users);
+
+		// داده‌های جدول profile
+		$data_profile = [
+			'user_id' => $user_id,
+			'created' => $now,
+			'name' => $this->input->post('name', true),
+			'family' => $this->input->post('family', true),
+			'reciever_phone_number' => $this->input->post('phone_number1', true),
+			'ostan' => $this->input->post('ostan', true),
+			'city' => $this->input->post('city', true),
+			'address' => $this->input->post('address', true),
+			'postal_code' => $this->input->post('postal_code', true)
+		];
+		$this->base_model->insert_data('profile', $data_profile);
+
+		// داده‌های جدول user_roles
+		$data_user_roles = [
+			'user_id' => $user_id,
+			'role_id' => $this->input->post('role', true),
+			'isActive' => 1,
+			'created' => $now,
+			'modified' => $now
+		];
+		$this->base_model->insert_data('user_roles', $data_user_roles);
+
+		// ثبت لاگ‌ها
+		$this->base_model->add_log('users', $user_id, 'add_user_success', null, (array)$data_users, 'افزودن کاربر جدید با شماره موبایل: ' . $phone_number, $group_id, $operationInfo);
+		$this->base_model->add_log('profile', $user_id, 'add_user_success', null, (array)$data_profile, 'افزودن کاربر جدید با شماره موبایل: ' . $phone_number, $group_id, $operationInfo);
+		$this->base_model->add_log('user_roles', $user_id, 'add_user_success', null, (array)$data_user_roles, 'افزودن نقش به کاربر با شماره موبایل: ' . $phone_number, $group_id, $operationInfo);
+
+		$this->session->set_flashdata('success', 'کاربر با موفقیت ایجاد شد.');
+		redirect('admin/insert_user');
 	}
+
 
 	public function edit_user($id)
 	{
