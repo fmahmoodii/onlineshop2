@@ -319,8 +319,7 @@ class Admin extends CI_Controller
 		);
 
 		$can_edit = $this->base_model->has_permission(
-			$this->session->userdata('user_id'),
-			['دسترسی کامل']
+			$this->session->userdata('user_id'), ['ویرایش کاربر', 'دسترسی کامل']
 		);
 
 		$data = [];
@@ -355,7 +354,7 @@ class Admin extends CI_Controller
 			// Reset password
 			$sub_array[] = '<button type="button" id="reset" user_id="'.$row->user_id.'" id_prof="'.$row->profile_id.'" class="btn btn-info"><i class="fa fa-key"></i></button>';
 
-			// Edit
+
 			// Edit
 			$sub_array[] = '<a href="'.base_url('admin/edit_user/'.$row->user_id).'">
     <button class="btn btn-warning edit-btn" '.($can_edit ? '' : 'data-no-permission="true"').'>

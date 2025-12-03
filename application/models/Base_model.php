@@ -262,16 +262,16 @@ class base_model extends CI_Model
 
 	public function has_permission($user_id, $permissions)
 	{
-		// اگر ورودی یک رشته بود، به آرایه تبدیل کن
 		if (!is_array($permissions)) {
 			$permissions = [$permissions];
 		}
 
-		// گرفتن roleهای کاربر
+		// گرفتن نقش‌های فعال کاربر
 		$roles = $this->db
 			->select('role_id')
 			->from('user_roles')
 			->where('user_id', $user_id)
+			->where('isActive', 1)
 			->get()
 			->result();
 
@@ -279,15 +279,27 @@ class base_model extends CI_Model
 			return false;
 		}
 
-		$role_ids = array_map(function($r) { return $r->role_id; }, $roles);
+		$role_ids = array_map(function($r) {
+			return $r->role_id;
+		}, $roles);
 
-		// چک کردن وجود حداقل یکی از پرمیشن‌ها
-		$this->db->where_in('permission_name', $permissions);
-		$this->db->where_in('role_id', $role_ids);
-		$query = $this->db->get('permissions');
+		// بررسی وجود حداقل یکی از پرمیشن‌ها در role_permissions
+		$this->db
+			->select('p.id')
+			->from('permissions p')
+			->join('role_permissions rp', 'rp.permission_id = p.id')
+			->where_in('rp.role_id', $role_ids)
+			->where_in('p.name', $permissions)
+			->where('p.isActive', 1)
+			->where('rp.isActive', 1)
+			->limit(1);
+
+		$query = $this->db->get();
 
 		return $query->num_rows() > 0;
 	}
+
+
 
 
 
