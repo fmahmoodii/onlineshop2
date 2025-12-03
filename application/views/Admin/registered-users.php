@@ -120,6 +120,10 @@
 		});
 	});
 
+	var USER_CAN_DELETE = <?= $permissions['delete'] ? 'true' : 'false' ?>;
+	var USER_CAN_EDIT   = <?= $permissions['edit'] ? 'true' : 'false' ?>;
+	var USER_CAN_ADD    = <?= $permissions['add'] ? 'true' : 'false' ?>;
+
 	function showSnackbar(type) {
 		// type: 'del', 'ins', 'upd'
 		var id = 'snackbar_' + type;
@@ -134,17 +138,22 @@
 
 	// حذف تکی
 	$(document).on('click', '#delete', function(){
-		var user_id = $(this).attr("user_id");
-		if(confirm('آیا از حذف محصول اطمینان دارید؟')) {
-			$.ajax({
-				url:"<?php echo base_url(); ?>admin/delete_user",
-				method:"POST",
-				data:{ user_ids: [user_id] }, // ارسال به صورت آرایه
-				success:function(){
-					$('#usr_data').DataTable().ajax.reload(null, false);
-					showSnackbar('del');
-				}
-			});
+		if (!USER_CAN_DELETE) {
+			alert("شما مجوز حذف کاربر را ندارید.");
+			return false;
+		}else{
+			var user_id = $(this).attr("user_id");
+			if(confirm('آیا از حذف محصول اطمینان دارید؟')) {
+				$.ajax({
+					url:"<?php echo base_url(); ?>admin/delete_user",
+					method:"POST",
+					data:{ user_ids: [user_id] }, // ارسال به صورت آرایه
+					success:function(){
+						$('#usr_data').DataTable().ajax.reload(null, false);
+						showSnackbar('del');
+					}
+				});
+			}
 		}
 	});
 
@@ -156,19 +165,24 @@
 		});
 
 		if(user_ids.length > 0) {
-			if(confirm('آیا از حذف محصولات انتخاب شده اطمینان دارید؟')) {
-				$.ajax({
-					type: "POST",
-					url:"<?php echo base_url(); ?>admin/delete_user",
-					data: { user_ids: user_ids }, // ارسال همان آرایه
-					success: function(){
-						$('#usr_data').DataTable().ajax.reload(null, false);
-						showSnackbar('del');
-					},
-					error: function(jqXHR, textStatus, errorThrown) {
-						$("#msg").html("<span style='color:red;'>" + textStatus + " " + errorThrown + "</span>");
-					}
-				});
+			if (!USER_CAN_DELETE) {
+				alert("شما مجوز حذف کاربر را ندارید.");
+				return false;
+			}else{
+				if(confirm('آیا از حذف محصولات انتخاب شده اطمینان دارید؟')) {
+					$.ajax({
+						type: "POST",
+						url:"<?php echo base_url(); ?>admin/delete_user",
+						data: { user_ids: user_ids }, // ارسال همان آرایه
+						success: function(){
+							$('#usr_data').DataTable().ajax.reload(null, false);
+							showSnackbar('del');
+						},
+						error: function(jqXHR, textStatus, errorThrown) {
+							$("#msg").html("<span style='color:red;'>" + textStatus + " " + errorThrown + "</span>");
+						}
+					});
+				}
 			}
 		} else {
 			alert('حداقل یک رکورد انتخاب کنید.');

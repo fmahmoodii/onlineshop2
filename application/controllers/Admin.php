@@ -21,36 +21,53 @@ class Admin extends CI_Controller
 	}
 	//<<--------------- end date_shamsi_ghamari ---------------->>
 
-	protected function check_permission($permission_name, $table_name)
+	protected function check_permission_ajax(array $permissions, $table_name = null)
 	{
-		$user_id = $this->session->userdata('id');
-		$group_id = uniqid('grp_', true);
-		$operationInfo = "بررسی دسترسی";
+		$user_id = $this->session->userdata('user_id');
 
 		if (!$user_id) {
-			$this->session->set_flashdata('err', 'ابتدا وارد سیستم شوید');
-			redirect('admin/login_page');
+			echo json_encode([
+				'status' => 0,
+				'msg' => 'دسترسی شما منقضی شده است. لطفاً دوباره وارد شوید.'
+			]);
 			exit;
 		}
 
-		if (!$this->base_model->has_permission($user_id, $permission_name, $table_name)) {
+		$hasAccess = false;
+
+		foreach ($permissions as $perm) {
+			if ($this->permission_model->has_permission($user_id, $perm, $table_name)) {
+				$hasAccess = true;
+				break;
+			}
+		}
+
+		if (!$hasAccess) {
+
 			// ثبت لاگ
 			$this->base_model->add_log(
-				$table_name,
+				'permissions',
 				$user_id,
-				'permission_denied',
+				'access_denied',
 				null,
 				null,
-				"کاربر اجازه $permission_name روی جدول $table_name را ندارد",
-				$group_id,
-				$operationInfo
+				'عدم مجوز برای: ' . implode(' ، ', $permissions) .
+				' | جدول: ' . ($table_name ?: 'بدون جدول'),
+				uniqid('grp_', true),
+				'عدم دسترسی'
 			);
 
-			$this->session->set_flashdata('err', 'شما اجازه انجام این عملیات را ندارید');
-			redirect('admin');
+			echo json_encode([
+				'status' => 0,
+				'msg' => 'شما مجوز انجام این عملیات را ندارید.'
+			]);
 			exit;
 		}
+
+		return true;
 	}
+
+
 
 	// 📊 صفحه‌ی اصلی ادمین (داشبورد)
 	public function index()
@@ -237,6 +254,18 @@ class Admin extends CI_Controller
 
 
 	public function registered_users(){
+
+		$is_user = $this->session->userdata('user_id');
+		$permissions = [
+			'delete' => $this->base_model->has_permission($is_user, ['حذف کاربر', 'دسترسی کامل']),
+
+			'edit'   => $this->base_model->has_permission($is_user, ['ویرایش کاربر', 'دسترسی کامل']),
+
+			'add'    => $this->base_model->has_permission($is_user, ['ایجاد کاربر', 'دسترسی کامل'])
+		];
+
+		$data['permissions'] = $permissions;
+
 		$data['profile']=$this->base_model->get_data('profile','*');
 		$data['users']=$this->base_model->get_data('users','*');
 		$data['roles']=$this->base_model->get_data('roles','*');
@@ -344,6 +373,7 @@ class Admin extends CI_Controller
 
 	public function delete_user()
 	{
+
 		if ($_POST && isset($_POST['user_ids']) && is_array($_POST['user_ids'])) {
 
 			$user_ids = $_POST['user_ids'];
