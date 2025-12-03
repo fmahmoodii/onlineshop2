@@ -135,6 +135,13 @@
 		}, 3000);
 	}
 
+	$(document).on('click', '.edit-btn', function(e){
+		if ($(this).data('no-permission')) {
+			e.preventDefault();
+			alert('شما دسترسی انجام این عملیات را ندارید!');
+			return false;
+		}
+	});
 
 	// حذف تکی
 	$(document).on('click', '#delete', function(){
