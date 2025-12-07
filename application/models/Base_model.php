@@ -260,13 +260,13 @@ class base_model extends CI_Model
 	}
 
 
-	public function has_permission($user_id, $permissions)
+	public function has_permission($user_id, $permissions, $table_name = null)
 	{
 		if (!is_array($permissions)) {
 			$permissions = [$permissions];
 		}
 
-		// گرفتن نقش‌های فعال کاربر
+		// گرفتن roleهای کاربر
 		$roles = $this->db
 			->select('role_id')
 			->from('user_roles')
@@ -275,29 +275,31 @@ class base_model extends CI_Model
 			->get()
 			->result();
 
-		if (!$roles) {
-			return false;
-		}
+		if (!$roles) return false;
 
-		$role_ids = array_map(function($r) {
-			return $r->role_id;
-		}, $roles);
+		$role_ids = array_map(function($r) { return $r->role_id; }, $roles);
 
-		// بررسی وجود حداقل یکی از پرمیشن‌ها در role_permissions
-		$this->db
-			->select('p.id')
+		// آماده‌سازی کوئری
+		$this->db->select('p.id')
 			->from('permissions p')
-			->join('role_permissions rp', 'rp.permission_id = p.id')
+			->join('role_permissions rp', 'rp.permission_id = p.id AND rp.isActive = 1', 'inner')
 			->where_in('rp.role_id', $role_ids)
 			->where_in('p.name', $permissions)
-			->where('p.isActive', 1)
-			->where('rp.isActive', 1)
-			->limit(1);
+			->where('p.isActive', 1);
+
+		// اگر جدول مشخص شده، فقط یا table_name مطابق باشه یا پرمیشن دسترسی کامل باشه
+		if ($table_name) {
+			$this->db->group_start();
+			$this->db->where('p.table_name', $table_name);
+			$this->db->or_where('p.name', 'دسترسی کامل');
+			$this->db->group_end();
+		}
 
 		$query = $this->db->get();
 
 		return $query->num_rows() > 0;
 	}
+
 
 
 

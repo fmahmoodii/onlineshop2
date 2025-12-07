@@ -21,54 +21,6 @@ class Admin extends CI_Controller
 	}
 	//<<--------------- end date_shamsi_ghamari ---------------->>
 
-	protected function check_permission_ajax(array $permissions, $table_name = null)
-	{
-		$user_id = $this->session->userdata('user_id');
-
-		if (!$user_id) {
-			echo json_encode([
-				'status' => 0,
-				'msg' => 'دسترسی شما منقضی شده است. لطفاً دوباره وارد شوید.'
-			]);
-			exit;
-		}
-
-		$hasAccess = false;
-
-		foreach ($permissions as $perm) {
-			if ($this->permission_model->has_permission($user_id, $perm, $table_name)) {
-				$hasAccess = true;
-				break;
-			}
-		}
-
-		if (!$hasAccess) {
-
-			// ثبت لاگ
-			$this->base_model->add_log(
-				'permissions',
-				$user_id,
-				'access_denied',
-				null,
-				null,
-				'عدم مجوز برای: ' . implode(' ، ', $permissions) .
-				' | جدول: ' . ($table_name ?: 'بدون جدول'),
-				uniqid('grp_', true),
-				'عدم دسترسی'
-			);
-
-			echo json_encode([
-				'status' => 0,
-				'msg' => 'شما مجوز انجام این عملیات را ندارید.'
-			]);
-			exit;
-		}
-
-		return true;
-	}
-
-
-
 	// 📊 صفحه‌ی اصلی ادمین (داشبورد)
 	public function index()
 	{
@@ -257,11 +209,14 @@ class Admin extends CI_Controller
 
 		$is_user = $this->session->userdata('user_id');
 		$permissions = [
-			'delete' => $this->base_model->has_permission($is_user, ['حذف کاربر', 'دسترسی کامل']),
+			'delete' => $this->base_model->has_permission($is_user, ['حذف کاربر', 'دسترسی کامل'],
+				'users'),
 
-			'edit'   => $this->base_model->has_permission($is_user, ['ویرایش کاربر', 'دسترسی کامل']),
+			'edit'   => $this->base_model->has_permission($is_user, ['ویرایش کاربر', 'دسترسی کامل'],
+				'users'),
 
-			'add'    => $this->base_model->has_permission($is_user, ['ایجاد کاربر', 'دسترسی کامل'])
+			'add'    => $this->base_model->has_permission($is_user, ['ایجاد کاربر', 'دسترسی کامل'],
+				'users')
 		];
 
 		$data['permissions'] = $permissions;
@@ -319,7 +274,9 @@ class Admin extends CI_Controller
 		);
 
 		$can_edit = $this->base_model->has_permission(
-			$this->session->userdata('user_id'), ['ویرایش کاربر', 'دسترسی کامل']
+			$this->session->userdata('user_id'),
+			['ویرایش کاربر', 'دسترسی کامل'],
+			'users'
 		);
 
 		$data = [];
