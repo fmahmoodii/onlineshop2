@@ -273,11 +273,26 @@ class Admin extends CI_Controller
 			['users.id' => 'DESC']
 		);
 
-		$can_edit = $this->base_model->has_permission(
-			$this->session->userdata('user_id'),
-			['ویرایش کاربر', 'دسترسی کامل'],
-			'users'
+		$user_id = $this->session->userdata('user_id');
+		$table_name = 'users'; // جدول موردنظر
+
+// گرفتن همه دسترسی‌های کاربر برای جدول موردنظر یا دسترسی کامل
+		$permissions = $this->base_model->get_data('permissions p', 'p.name, p.table_name', NULL, NULL, NULL, NULL, NULL,
+			[
+				'role_permissions rp' => 'rp.permission_id = p.id AND rp.isActive = 1',
+				'user_roles ur' => 'ur.role_id = rp.role_id AND ur.user_id = '.$user_id.' AND ur.isActive = 1'
+			]
 		);
+
+// بررسی پرمیشن‌ها
+		$can_edit = false;
+		foreach ($permissions as $p) {
+			if (($p->table_name == $table_name && $p->name == 'ویرایش کاربر') || $p->name == 'دسترسی کامل') {
+				$can_edit = true;
+				break;
+			}
+		}
+
 
 		$data = [];
 		foreach ($result['data'] as $row) {
@@ -315,6 +330,7 @@ class Admin extends CI_Controller
 			// Edit
 			$sub_array[] = '<a href="'.base_url('admin/edit_user/'.$row->user_id).'">
     <button class="btn btn-warning edit-btn" '.($can_edit ? '' : 'data-no-permission="true"').'>
+    
         <i class="fa fa-edit"></i>
     </button>
 </a>';

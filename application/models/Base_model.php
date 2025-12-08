@@ -279,26 +279,31 @@ class base_model extends CI_Model
 
 		$role_ids = array_map(function($r) { return $r->role_id; }, $roles);
 
-		// آماده‌سازی کوئری
 		$this->db->select('p.id')
 			->from('permissions p')
 			->join('role_permissions rp', 'rp.permission_id = p.id AND rp.isActive = 1', 'inner')
 			->where_in('rp.role_id', $role_ids)
-			->where_in('p.name', $permissions)
 			->where('p.isActive', 1);
 
-		// اگر جدول مشخص شده، فقط یا table_name مطابق باشه یا پرمیشن دسترسی کامل باشه
+		// گروه بندی برای شرط جدول و پرمیشن
 		if ($table_name) {
 			$this->db->group_start();
 			$this->db->where('p.table_name', $table_name);
-			$this->db->or_where('p.name', 'دسترسی کامل');
+			$this->db->where_in('p.name', $permissions);
 			$this->db->group_end();
+		} else {
+			$this->db->where_in('p.name', $permissions);
 		}
+
+		// OR حالت دسترسی کامل خارج از گروه قبلی
+		$this->db->or_where('p.name', 'دسترسی کامل');
 
 		$query = $this->db->get();
 
 		return $query->num_rows() > 0;
 	}
+
+
 
 
 

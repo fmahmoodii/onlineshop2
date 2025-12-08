@@ -120,9 +120,10 @@
 		});
 	});
 
-	var USER_CAN_DELETE = <?= $permissions['delete'] ? 'true' : 'false' ?>;
-	var USER_CAN_EDIT   = <?= $permissions['edit'] ? 'true' : 'false' ?>;
-	var USER_CAN_ADD    = <?= $permissions['add'] ? 'true' : 'false' ?>;
+	var USER_CAN_DELETE = <?= json_encode($permissions['delete']); ?>;
+	var USER_CAN_EDIT   = <?= json_encode($permissions['edit']); ?>;
+	var USER_CAN_ADD    = <?= json_encode($permissions['add']); ?>;
+
 
 	function showSnackbar(type) {
 		// type: 'del', 'ins', 'upd'
