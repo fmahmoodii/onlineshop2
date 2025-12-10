@@ -277,31 +277,35 @@ class base_model extends CI_Model
 
 		if (!$roles) return false;
 
-		$role_ids = array_map(function($r) { return $r->role_id; }, $roles);
+		$role_ids = array_map(function($r){ return $r->role_id; }, $roles);
 
-		$this->db->select('p.id')
+		// گرفتن همه پرمیشن‌های کاربر
+		$user_permissions = $this->db
+			->select('p.name, p.table_name')
 			->from('permissions p')
 			->join('role_permissions rp', 'rp.permission_id = p.id AND rp.isActive = 1', 'inner')
 			->where_in('rp.role_id', $role_ids)
-			->where('p.isActive', 1);
+			->where('p.isActive', 1)
+			->get()
+			->result();
 
-		// گروه بندی برای شرط جدول و پرمیشن
-		if ($table_name) {
-			$this->db->group_start();
-			$this->db->where('p.table_name', $table_name);
-			$this->db->where_in('p.name', $permissions);
-			$this->db->group_end();
-		} else {
-			$this->db->where_in('p.name', $permissions);
+		// بررسی حداقل یکی از پرمیشن‌ها (OR)
+		foreach($user_permissions as $p){
+			if ($table_name) {
+				if ($p->table_name == $table_name && in_array($p->name, $permissions)) {
+					return true;
+				}
+			} else {
+				if (in_array($p->name, $permissions)) {
+					return true;
+				}
+			}
 		}
 
-		// OR حالت دسترسی کامل خارج از گروه قبلی
-		$this->db->or_where('p.name', 'دسترسی کامل');
-
-		$query = $this->db->get();
-
-		return $query->num_rows() > 0;
+		return false;
 	}
+
+
 
 
 

@@ -82,6 +82,7 @@
 
 
 <script type="text/javascript" language="javascript" >
+
 	$(document).ready(function(){
 		var dataTable = $('#usr_data').DataTable({
 			language: {
@@ -120,10 +121,6 @@
 		});
 	});
 
-	var USER_CAN_DELETE = <?= json_encode($permissions['delete']); ?>;
-	var USER_CAN_EDIT   = <?= json_encode($permissions['edit']); ?>;
-	var USER_CAN_ADD    = <?= json_encode($permissions['add']); ?>;
-
 
 	function showSnackbar(type) {
 		// type: 'del', 'ins', 'upd'
@@ -146,17 +143,18 @@
 
 	// حذف تکی
 	$(document).on('click', '#delete', function(){
-		if (!USER_CAN_DELETE) {
-			alert("شما مجوز حذف کاربر را ندارید.");
+		if ($(this).data('no-permission')) {
+			e.preventDefault();
+			alert('شما دسترسی انجام این عملیات را ندارید!');
 			return false;
-		}else{
+		}else {
 			var user_id = $(this).attr("user_id");
-			if(confirm('آیا از حذف محصول اطمینان دارید؟')) {
+			if (confirm('آیا از حذف محصول اطمینان دارید؟')) {
 				$.ajax({
-					url:"<?php echo base_url(); ?>admin/delete_user",
-					method:"POST",
-					data:{ user_ids: [user_id] }, // ارسال به صورت آرایه
-					success:function(){
+					url: "<?php echo base_url(); ?>admin/delete_user",
+					method: "POST",
+					data: {user_ids: [user_id]}, // ارسال به صورت آرایه
+					success: function () {
 						$('#usr_data').DataTable().ajax.reload(null, false);
 						showSnackbar('del');
 					}
@@ -173,20 +171,21 @@
 		});
 
 		if(user_ids.length > 0) {
-			if (!USER_CAN_DELETE) {
-				alert("شما مجوز حذف کاربر را ندارید.");
+			if ($(this).data('no-permission')) {
+				e.preventDefault();
+				alert('شما دسترسی انجام این عملیات را ندارید!');
 				return false;
-			}else{
-				if(confirm('آیا از حذف محصولات انتخاب شده اطمینان دارید؟')) {
+			}else {
+				if (confirm('آیا از حذف محصولات انتخاب شده اطمینان دارید؟')) {
 					$.ajax({
 						type: "POST",
-						url:"<?php echo base_url(); ?>admin/delete_user",
-						data: { user_ids: user_ids }, // ارسال همان آرایه
-						success: function(){
+						url: "<?php echo base_url(); ?>admin/delete_user",
+						data: {user_ids: user_ids}, // ارسال همان آرایه
+						success: function () {
 							$('#usr_data').DataTable().ajax.reload(null, false);
 							showSnackbar('del');
 						},
-						error: function(jqXHR, textStatus, errorThrown) {
+						error: function (jqXHR, textStatus, errorThrown) {
 							$("#msg").html("<span style='color:red;'>" + textStatus + " " + errorThrown + "</span>");
 						}
 					});
