@@ -206,8 +206,7 @@ class Admin extends CI_Controller
 
 
 	public function registered_users(){
-
-		$is_user = $this->session->userdata('user_id');
+		$is_user = $this->session->userdata('id');
 		$permissions = [
 			'delete' => $this->base_model->has_permission($is_user, ['حذف کاربر', 'دسترسی کامل'],
 				'users'),
@@ -273,7 +272,7 @@ class Admin extends CI_Controller
 			['users.id' => 'DESC']
 		);
 
-		$is_user = $this->session->userdata('user_id');
+		$is_user = $this->session->userdata('id');
 		$permissions = [
 			'delete' => $this->base_model->has_permission($is_user, ['حذف کاربر', 'دسترسی کامل'],
 				'users'),
@@ -326,7 +325,8 @@ class Admin extends CI_Controller
         </a>';
 
 			// Delete
-			$sub_array[] = '<button id="delete" user_id="'.$row->user_id.'" id_prof="'.$row->profile_id.'" class="btn btn-danger"><i class="fa fa-trash"></i></button>';
+			$sub_array[] = '<button id="delete" user_id="'.$row->user_id.'" id_prof="'.$row->profile_id.'" class="btn btn-danger"
+'.($permissions['delete'] ? '' : 'data-no-permission="true"').'><i class="fa fa-trash"></i></button>';
 
 			$data[] = $sub_array;
 		}
@@ -341,108 +341,136 @@ class Admin extends CI_Controller
 		echo json_encode($output);
 	}
 
-	
+
 	public function delete_user()
 	{
+		// 1️⃣ چک دسترسی
+		$is_user = $this->session->userdata('id');
 
-		if ($_POST && isset($_POST['user_ids']) && is_array($_POST['user_ids'])) {
-
-			$user_ids = $_POST['user_ids'];
-			$group_id = uniqid('grp_', true);
-			$operationInfo = "حذف کاربران";
-
-			// گرفتن اطلاعات قبل از حذف از جدول users
-			$users = $this->base_model->get_data(
-				'users',
-				'*',
-				null,
-				null,
-				null,
-				['id' => $user_ids]
-			);
-
-			// گرفتن اطلاعات قبل از حذف از جدول profile
-			$profiles = $this->base_model->get_data(
-				'profile',
-				'*',
-				null,
-				null,
-				null,
-				['user_id' => $user_ids]
-			);
-
-			// گرفتن اطلاعات قبل از حذف از جدول user_roles
-			$user_roles = $this->base_model->get_data(
-				'user_roles',
-				'*',
-				null,
-				null,
-				null,
-				['user_id' => $user_ids]
-			);
-
-			// ساخت map برای دسترسی سریع به نام و نام خانوادگی با user_id
-			$profileMap = [];
-			foreach ($profiles as $p) {
-				$profileMap[$p->user_id] = $p;
-			}
-
-			// حذف گروهی
-			$this->db->where_in('user_id', $user_ids)->delete('profile');
-			$this->db->where_in('user_id', $user_ids)->delete('user_roles');
-			$this->db->where_in('id', $user_ids)->delete('users');
-
-			// ثبت لاگ برای users
-			foreach ($users as $user) {
-				$fullName = isset($profileMap[$user->id])
-					? $profileMap[$user->id]->name . ' ' . $profileMap[$user->id]->family
-					: 'نامشخص';
-
-				$this->base_model->add_log(
-					'users',
-					$user->id,
-					'delete',
-					(array)$user,
-					null,
-					'حذف کاربر: ' . $fullName,
-					$group_id,
-					$operationInfo
-				);
-			}
-
-			// ثبت لاگ برای profile
-			foreach ($profiles as $p) {
-				$this->base_model->add_log(
-					'profile',
-					$p->id,
-					'delete',
-					(array)$p,
-					null,
-					'حذف کاربر: ' . $p->name . ' ' . $p->family,
-					$group_id,
-					$operationInfo
-				);
-			}
-
-			// ثبت لاگ برای نقش‌ها
-			foreach ($user_roles as $ur) {
-				$this->base_model->add_log(
-					'user_roles',
-					$ur->id,
-					'delete',
-					(array)$ur,
-					null,
-					'حذف نقش کاربر با user_id: ' . $fullName,
-					$group_id,
-					$operationInfo
-				);
-			}
-
-			echo 1;
-		} else {
-			echo 0;
+		if (!$this->base_model->has_permission(
+			$is_user,
+			['حذف کاربر', 'دسترسی کامل'],
+			'users'
+		)) {
+			echo json_encode([
+				'status'  => 0,
+				'message' => 'شما دسترسی حذف کاربر را ندارید'
+			]);
+			return;
 		}
+
+		// 2️⃣ اعتبارسنجی ورودی
+		if (!$_POST || !isset($_POST['user_ids']) || !is_array($_POST['user_ids'])) {
+			echo json_encode([
+				'status'  => 0,
+				'message' => 'داده نامعتبر است'
+			]);
+			return;
+		}
+
+		$user_ids = $_POST['user_ids'];
+
+		// 3️⃣ جلوگیری از حذف خود کاربر لاگین‌شده
+		if (in_array($is_user, $user_ids)) {
+			echo json_encode([
+				'status'  => 0,
+				'message' => 'امکان حذف حساب کاربری خودتان وجود ندارد'
+			]);
+			return;
+		}
+
+		// (اختیاری) جلوگیری از حذف کاربر سیستمی
+		$protected_users = [1]; // user_id سیستمی
+		if (array_intersect($protected_users, $user_ids)) {
+			echo json_encode([
+				'status'  => 0,
+				'message' => 'امکان حذف کاربر سیستمی وجود ندارد'
+			]);
+			return;
+		}
+
+		$group_id      = uniqid('grp_', true);
+		$operationInfo = "حذف کاربران";
+
+		// گرفتن اطلاعات قبل از حذف
+		$users = $this->base_model->get_data('users', '*', null, null, null, ['id' => $user_ids]);
+		$profiles = $this->base_model->get_data('profile', '*', null, null, null, ['user_id' => $user_ids]);
+		$user_roles = $this->base_model->get_data('user_roles', '*', null, null, null, ['user_id' => $user_ids]);
+
+		// map پروفایل
+		$profileMap = [];
+		foreach ($profiles as $p) {
+			$profileMap[$p->user_id] = $p;
+		}
+
+		// 4️⃣ حذف با transaction
+		$this->db->trans_start();
+
+		$this->db->where_in('user_id', $user_ids)->delete('profile');
+		$this->db->where_in('user_id', $user_ids)->delete('user_roles');
+		$this->db->where_in('id', $user_ids)->delete('users');
+
+		$this->db->trans_complete();
+
+		if ($this->db->trans_status() === FALSE) {
+			echo json_encode([
+				'status'  => 0,
+				'message' => 'خطا در حذف کاربران'
+			]);
+			return;
+		}
+
+		// 5️⃣ ثبت لاگ‌ها
+		foreach ($users as $user) {
+			$fullName = isset($profileMap[$user->id])
+				? $profileMap[$user->id]->name . ' ' . $profileMap[$user->id]->family
+				: 'نامشخص';
+
+			$this->base_model->add_log(
+				'users',
+				$user->id,
+				'delete',
+				(array)$user,
+				null,
+				'حذف کاربر: ' . $fullName,
+				$group_id,
+				$operationInfo
+			);
+		}
+
+		foreach ($profiles as $p) {
+			$this->base_model->add_log(
+				'profile',
+				$p->id,
+				'delete',
+				(array)$p,
+				null,
+				'حذف کاربر: ' . $p->name . ' ' . $p->family,
+				$group_id,
+				$operationInfo
+			);
+		}
+
+		foreach ($user_roles as $ur) {
+			$fullName = isset($profileMap[$user->id])
+				? $profileMap[$user->id]->name . ' ' . $profileMap[$user->id]->family
+				: 'نامشخص';
+
+			$this->base_model->add_log(
+				'user_roles',
+				$ur->id,
+				'delete',
+				(array)$ur,
+				null, 'حذف نقش کاربر با user_id: ' . $fullName,
+				$group_id,
+				$operationInfo );
+		}
+
+		echo json_encode([
+			'status' => 1
+		]);
 	}
+
 
 
 	function toggle_user_status()
@@ -687,7 +715,23 @@ class Admin extends CI_Controller
 
 	public function add_user()
 	{
-		if (!$this->input->post()) return;
+		// 1️⃣ چک دسترسی – حتماً در ابتدای متد
+		$is_user = $this->session->userdata('id');
+
+		if (!$this->base_model->has_permission(
+			$is_user,
+			['ایجاد کاربر', 'دسترسی کامل'],
+			'users'
+		)) {
+			$this->session->set_flashdata('err', 'شما دسترسی ایجاد کاربر را ندارید.');
+			redirect('admin/registered_users');
+			return;
+		}
+
+		// 2️⃣ اگر فرم ارسال نشده، برگرد به فرم
+		if (!$this->input->post()) {
+			return $this->insert_user();
+		}
 
 		$this->load->library('form_validation');
 		$this->load->helper('form');
@@ -812,6 +856,20 @@ class Admin extends CI_Controller
 
 	public function edit_u($id)
 	{
+		// 1️⃣ چک دسترسی – حتماً در ابتدای متد
+		$is_user = $this->session->userdata('id');
+
+		if (!$this->base_model->has_permission(
+			$is_user,
+			['ویرایش کاربر', 'دسترسی کامل'],
+			'users'
+		)) {
+			$this->session->set_flashdata('err', 'شما دسترسی ویرایش کاربر را ندارید.');
+			redirect('admin/registered_users');
+			return;
+		}
+
+
 		if (!$this->input->post()) return;
 
 		$this->load->library('form_validation');

@@ -44,6 +44,8 @@
 		<div id="snackbar_del" class="snackbar">حذف با موفقیت انجام شد</div>
 		<div id="snackbar_ins" class="snackbar">درج با موفقیت انجام شد</div>
 		<div id="snackbar_upd" class="snackbar">ویرایش با موفقیت انجام شد</div>
+		<div id="snackbar_err" class="snackbar">عدم دسترسی</div>
+
 
 	</div>
 
@@ -142,55 +144,62 @@
 	});
 
 	// حذف تکی
-	$(document).on('click', '#delete', function(){
+	$(document).on('click', '#delete', function(e){
 		if ($(this).data('no-permission')) {
 			e.preventDefault();
 			alert('شما دسترسی انجام این عملیات را ندارید!');
 			return false;
 		}else {
 			var user_id = $(this).attr("user_id");
-			if (confirm('آیا از حذف محصول اطمینان دارید؟')) {
+			if (confirm('آیا از حذف کاربر اطمینان دارید؟')) {
 				$.ajax({
 					url: "<?php echo base_url(); ?>admin/delete_user",
 					method: "POST",
 					data: {user_ids: [user_id]}, // ارسال به صورت آرایه
-					success: function () {
-						$('#usr_data').DataTable().ajax.reload(null, false);
-						showSnackbar('del');
+					success: function (response) {
+						var res = JSON.parse(response);
+
+						if (res.status == 1) {
+							$('#usr_data').DataTable().ajax.reload(null, false);
+							showSnackbar('del');
+						} else {
+							alert(res.message ?? 'خطا در انجام عملیات');
+						}
 					}
+
 				});
 			}
 		}
 	});
 
 	// حذف چندتایی (checkbox)
-	$("#delete_selected").on("click", function () {
+	$("#delete_selected").on("click", function (e) {
 		var user_ids = [];
 		$("input:checkbox[name='row-check']:checked").each(function() {
 			user_ids.push($(this).attr("user_id"));
 		});
 
 		if(user_ids.length > 0) {
-			if ($(this).data('no-permission')) {
-				e.preventDefault();
-				alert('شما دسترسی انجام این عملیات را ندارید!');
-				return false;
-			}else {
-				if (confirm('آیا از حذف محصولات انتخاب شده اطمینان دارید؟')) {
+
+				if (confirm('آیا از حذف کاربران انتخاب شده اطمینان دارید؟')) {
 					$.ajax({
 						type: "POST",
 						url: "<?php echo base_url(); ?>admin/delete_user",
 						data: {user_ids: user_ids}, // ارسال همان آرایه
-						success: function () {
-							$('#usr_data').DataTable().ajax.reload(null, false);
-							showSnackbar('del');
-						},
-						error: function (jqXHR, textStatus, errorThrown) {
-							$("#msg").html("<span style='color:red;'>" + textStatus + " " + errorThrown + "</span>");
+						success: function (response) {
+							var res = JSON.parse(response);
+
+							if (res.status == 1) {
+								$('#usr_data').DataTable().ajax.reload(null, false);
+								showSnackbar('del');
+							} else {
+								showError(res.message);
+								// alert(res.message ?? 'شما دسترسی انجام این عملیات را ندارید');
+							}
 						}
 					});
 				}
-			}
+
 		} else {
 			alert('حداقل یک رکورد انتخاب کنید.');
 		}

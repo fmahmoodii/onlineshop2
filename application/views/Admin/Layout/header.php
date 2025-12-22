@@ -57,6 +57,17 @@
 				x.className = x.className.replace("show", "");
 			}, 3000);
 		}
+
+		function showError(message) {
+			var x = document.getElementById("snackbar_err");
+			x.innerText = message || 'خطا در انجام عملیات';
+			x.className = "snackbar show";
+
+			setTimeout(function () {
+				x.className = x.className.replace("show", "");
+			}, 3000);
+		}
+
 	</script>
 
 <!--	<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />-->
@@ -94,6 +105,8 @@
 	#snackbar_del { background-color: #e74c3c; } /* قرمز برای حذف */
 	#snackbar_ins { background-color: #2ecc71; } /* سبز برای درج */
 	#snackbar_upd { background-color: #3498db; } /* آبی برای ویرایش */
+	#snackbar_err { background-color: #dbcd34; } /* زرد برای عدم دسترسی */
+
 
 	/* انیمیشن‌ها */
 	@-webkit-keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
