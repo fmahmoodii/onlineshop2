@@ -8,7 +8,7 @@ class base_model extends CI_Model
 		parent::__construct();
 	}
 
-	public function get_data($table, $select = '*', $where = NULL, $like = NULL, $or_where = NULL, $where_in = NULL, $order_by = NULL, $limit = NULL, $offset = NULL, $group_by = NULL, $join = NULL, $return_type = 'object') {
+	public function get_data($table, $select = '*', $where = NULL, $like = NULL, $or_where = NULL, $where_in = NULL, $order_by = NULL, $limit = NULL, $offset = NULL, $group_by = NULL, $join = NULL, $return_type = 'object', $include_deleted = false) {
 		$this->db->select($select);
 
 		// JOIN
@@ -27,10 +27,12 @@ class base_model extends CI_Model
 			$this->db->where($where);
 		}
 
-// اضافه کردن حذف نرم به صورت عمومی
-		$fields = $this->db->list_fields($table);
-		if (in_array('deleted_at', $fields)) {
-			$this->db->where('deleted_at', NULL);
+		// حذف نرم فقط اگر include_deleted = false
+		if (!$include_deleted) {
+			$fields = $this->db->list_fields($table);
+			if (in_array('deleted_at', $fields)) {
+				$this->db->where('deleted_at', NULL);
+			}
 		}
 
 		// LIKE

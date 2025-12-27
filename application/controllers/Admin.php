@@ -826,7 +826,14 @@ class Admin extends CI_Controller
             $phone = $this->input->post('phone_number', true);
 
             // بررسی وجود شماره موبایل در جدول users
-            $existing = $this->base_model->get_data('users', '*', ['phone_number' => $phone]);
+			$existing = $this->base_model->get_data(
+				'users',
+				'*',
+				['phone_number' => $phone],
+				null, null, null, null, null, null, null, null,
+				'object',
+				true // include_deleted = true
+			);
 
             if (!empty($existing)) {
                 echo 'exists';
