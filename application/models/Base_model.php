@@ -8,8 +8,6 @@ class base_model extends CI_Model
 		parent::__construct();
 	}
 
-
-
 	public function get_data($table, $select = '*', $where = NULL, $like = NULL, $or_where = NULL, $where_in = NULL, $order_by = NULL, $limit = NULL, $offset = NULL, $group_by = NULL, $join = NULL, $return_type = 'object') {
 		$this->db->select($select);
 
@@ -27,6 +25,12 @@ class base_model extends CI_Model
 		// WHERE
 		if (!empty($where)) {
 			$this->db->where($where);
+		}
+
+// اضافه کردن حذف نرم به صورت عمومی
+		$fields = $this->db->list_fields($table);
+		if (in_array('deleted_at', $fields)) {
+			$this->db->where('deleted_at', NULL);
 		}
 
 		// LIKE
@@ -74,7 +78,6 @@ class base_model extends CI_Model
 		return $return_type === 'array' ? $query->result_array() : $query->result_object();
 	}
 
-
 	public function insert_data($table, $data, $batch = FALSE)
 	{
 		if (empty($table) || empty($data)) {
@@ -96,7 +99,6 @@ class base_model extends CI_Model
 			return FALSE;
 		}
 	}
-
 
 	public function update_data($table, $data, $where = NULL, $batch = FALSE, $batch_index = NULL)
 	{
@@ -123,7 +125,47 @@ class base_model extends CI_Model
 		}
 	}
 
-	
+	public function soft_delete($table, $where = NULL, $batch = FALSE, $batch_index = NULL)
+	{
+		if (empty($table)) {
+			return FALSE;
+		}
+
+		$deletedAt = date('Y-m-d H:i:s');
+
+		// 🔹 حالت Batch
+		if ($batch === TRUE && $batch_index != NULL) {
+
+			if (empty($where) || !is_array($where)) {
+				return FALSE; // ⛔ جلوگیری از حذف کل جدول
+			}
+
+			$data = [];
+			foreach ($where as $id) {
+				$data[] = [
+					$batch_index => $id,
+					'deleted_at' => $deletedAt
+				];
+			}
+
+			$this->db->update_batch($table, $data, $batch_index);
+
+		} else {
+
+			// 🔹 حالت تکی / شرطی
+			if (empty($where) || !is_array($where)) {
+				return FALSE; // ⛔ where اجباری
+			}
+
+			$this->db->where($where);
+			$this->db->update($table, [
+				'deleted_at' => $deletedAt
+			]);
+		}
+
+		return $this->db->affected_rows() >= 0;
+	}
+
 	public function delete_data($table, $where = NULL, $where_in = NULL)
 	{
 		if (empty($table)) {
@@ -153,7 +195,6 @@ class base_model extends CI_Model
 		}
 	}
 
-
 	public function datatable($table, $columns, $post_data, $select = '*', $join = NULL, $where = NULL, $order_by_default = NULL)
 	{
 		// ---- آماده‌سازی Query اصلی ----
@@ -174,6 +215,12 @@ class base_model extends CI_Model
 		// WHERE
 		if ($where != NULL) {
 			$this->db->where($where);
+		}
+
+		// اضافه کردن حذف نرم به صورت عمومی
+		$fields = $this->db->list_fields($table);
+		if (in_array('deleted_at', $fields)) {
+			$this->db->where('deleted_at', NULL);
 		}
 
 		// ---- شمارش کل ----
@@ -232,7 +279,6 @@ class base_model extends CI_Model
 		];
 	}
 
-
 	public function add_log($entity_type, $entity_id, $action, $old_value = null, $new_value = null, $details = null, $group_id = null, $operation_info = null) {
 		$user_id = $this->session->userdata('id') ?? null;
 		$ip_address = $this->input->ip_address();
@@ -258,6 +304,8 @@ class base_model extends CI_Model
 			return false;
 		}
 	}
+
+
 
 
 	public function has_permission($user_id, $permissions, $table_name = null)

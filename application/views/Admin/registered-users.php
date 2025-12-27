@@ -7,11 +7,25 @@
 <!--		<a href="--><?php //echo base_url('admin/edit_off_code/').$p->id.'/'.$p->code ?><!--">-->
 
 		<div>
-			<a href="<?php echo base_url('admin/insert_user') ?>">
-				<button class="btn btn-success" id="new_user"
-						style="outline: unset" >کاربر جدید
+			<?php if (!empty($permissions['add']) && $permissions['add']): ?>
+
+				<a href="<?= base_url('admin/insert_user') ?>">
+					<button class="btn btn-success" id="new_user" style="outline: unset">
+						کاربر جدید
+					</button>
+				</a>
+
+			<?php else: ?>
+
+				<button class="btn btn-success"
+						id="new_user"
+						style="outline: unset"
+						onclick="showError('شما دسترسی ایجاد کاربر را ندارید')">
+					کاربر جدید
 				</button>
-			</a>
+
+			<?php endif; ?>
+
 			<button id='delete_selected' class="btn btn-sm ml-3 btn-danger" style="outline: none" >حذف همه</button>
 			<button id='update_selected' class="btn btn-sm ml-3 btn-warning" >ویرایش همه</button>
 			<button id='active_selected' class="btn btn-sm ml-3 btn-primary" >فعال سازی همه</button>
@@ -153,7 +167,7 @@
 			var user_id = $(this).attr("user_id");
 			if (confirm('آیا از حذف کاربر اطمینان دارید؟')) {
 				$.ajax({
-					url: "<?php echo base_url(); ?>admin/delete_user",
+					url: "<?php echo base_url(); ?>admin/soft_delete_user",
 					method: "POST",
 					data: {user_ids: [user_id]}, // ارسال به صورت آرایه
 					success: function (response) {
@@ -184,7 +198,7 @@
 				if (confirm('آیا از حذف کاربران انتخاب شده اطمینان دارید؟')) {
 					$.ajax({
 						type: "POST",
-						url: "<?php echo base_url(); ?>admin/delete_user",
+						url: "<?php echo base_url(); ?>admin/soft_delete_user",
 						data: {user_ids: user_ids}, // ارسال همان آرایه
 						success: function (response) {
 							var res = JSON.parse(response);
