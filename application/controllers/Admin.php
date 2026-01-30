@@ -135,7 +135,7 @@ class Admin extends CI_Controller
 
 
 		// 4) بررسی پرمیشن ورود به پنل
-		if (!$this->base_model->has_permission($users->id, 'دسترسی کامل')) {
+		if (!$this->base_model->has_permission($users->id, 'login_adminPanel')) {
 
 			$this->base_model->add_log(
 				'admin',
@@ -211,7 +211,7 @@ class Admin extends CI_Controller
 		// ⛔ چک VIEW ماژول
 		if (!$this->base_model->has_permission(
 			$is_user,
-			['نمایش کاربر', 'دسترسی کامل'],
+			['view', 'full'],
 			'users'
 		)) {
 			/*show_error('دسترسی غیرمجاز', 403);*/
@@ -227,9 +227,9 @@ class Admin extends CI_Controller
 
 		// permissionهای عملیاتی
 		$permissions = [
-			'add'    => $this->base_model->has_permission($is_user, ['ایجاد کاربر', 'دسترسی کامل'], 'users'),
-			'edit'   => $this->base_model->has_permission($is_user, ['ویرایش کاربر', 'دسترسی کامل'], 'users'),
-			'delete' => $this->base_model->has_permission($is_user, ['حذف کاربر', 'دسترسی کامل'], 'users'),
+			'add'    => $this->base_model->has_permission($is_user, ['insert', 'full'], 'users'),
+			'edit'   => $this->base_model->has_permission($is_user, ['edit', 'full'], 'users'),
+			'delete' => $this->base_model->has_permission($is_user, ['delete', 'full'], 'users'),
 		];
 
 		$data['permissions'] = $permissions;
@@ -288,13 +288,13 @@ class Admin extends CI_Controller
 
 		$is_user = $this->session->userdata('id');
 		$permissions = [
-			'delete' => $this->base_model->has_permission($is_user, ['حذف کاربر', 'دسترسی کامل'],
+			'delete' => $this->base_model->has_permission($is_user, ['delete', 'full'],
 				'users'),
 
-			'edit'   => $this->base_model->has_permission($is_user, ['ویرایش کاربر', 'دسترسی کامل'],
+			'edit'   => $this->base_model->has_permission($is_user, ['edit', 'full'],
 				'users'),
 
-			'add'    => $this->base_model->has_permission($is_user, ['ایجاد کاربر', 'دسترسی کامل'],
+			'add'    => $this->base_model->has_permission($is_user, ['insert', 'full'],
 				'users')
 		];
 		
@@ -362,7 +362,7 @@ class Admin extends CI_Controller
 
 		if (!$this->base_model->has_permission(
 			$is_user,
-			['حذف کاربر', 'دسترسی کامل'],
+			['delete', 'full'],
 			'users'
 		)) {
 			echo json_encode([
@@ -745,22 +745,6 @@ class Admin extends CI_Controller
 			return false;
 		}
 	}
-	public function _phoneExists($phone)
-	{
-		// اگر خالی بود (به خاطر required)، اجازه بده ولیدیشن ادامه پیدا کند
-		if (empty($phone)) {
-			return TRUE;
-		}
-
-		$existing = $this->base_model->get_data('users', '*', ['phone_number' => $phone]);
-
-		if (!empty($existing)) {
-//			$this->form_validation->set_message('_phoneExists', 'این شماره موبایل قبلاً ثبت شده است');
-			return FALSE;
-		}
-
-		return TRUE;
-	}
 	public function _phoneRegex2($phn_num2)
     {
         if (empty($phn_num2)) {
@@ -819,7 +803,6 @@ class Admin extends CI_Controller
 		}
 		echo $output;
 	}
-
     public function check_phone()
     {
         if ($this->input->post('phone_number')) {
@@ -832,7 +815,7 @@ class Admin extends CI_Controller
 				['phone_number' => $phone],
 				null, null, null, null, null, null, null, null,
 				'object',
-				true // include_deleted = true
+				false // include_deleted = true
 			);
 
             if (!empty($existing)) {
@@ -841,7 +824,7 @@ class Admin extends CI_Controller
                 echo 'ok';
             }
         } else {
-            echo 'ok';
+			echo 'exists';
         }
     }
 
@@ -867,7 +850,7 @@ class Admin extends CI_Controller
 
 		if (!$this->base_model->has_permission(
 			$is_user,
-			['ایجاد کاربر', 'دسترسی کامل'],
+			['insert', 'full'],
 			'users'
 		)) {
 			$this->session->set_flashdata('err', 'شما دسترسی ایجاد کاربر را ندارید.');
@@ -888,13 +871,13 @@ class Admin extends CI_Controller
 		$this->form_validation->set_message('min_length', '%s باید حداقل %d کاراکتر داشته باشد');
 		$this->form_validation->set_message('max_length', '%s باید حداکثر %d کاراکتر داشته باشد');
 		$this->form_validation->set_message('_phoneRegex', 'شماره وارد شده نادرست است');
-		$this->form_validation->set_message('_phoneExists', 'شماره وارد شده تکراری است');
+		$this->form_validation->set_message('check_phone', 'شماره وارد شده تکراری است');
 		$this->form_validation->set_message('_phoneRegex2', 'شماره وارد شده نادرست است');
 		$this->form_validation->set_message('_postal_check', 'در صورت ورود کدپستی، باید 10 رقم باشد');
 
 		$this->form_validation->set_rules('role', 'نوع کاربر', 'required');
 		$this->form_validation->set_rules('password', 'رمز عبور', 'required|min_length[8]|max_length[25]');
-		$this->form_validation->set_rules('phone_number', 'شماره موبایل', 'required|min_length[10]|max_length[11]|callback__phoneRegex|callback__phoneExists');
+		$this->form_validation->set_rules('phone_number', 'شماره موبایل', 'required|min_length[10]|max_length[11]|callback__phoneRegex|callback_check_phone');
 		$this->form_validation->set_rules('phone_number1', 'شماره موبایل ضروری', 'callback__phoneRegex2');
 		$this->form_validation->set_rules('postal_code', 'کد پستی', 'callback__postal_check');
 
@@ -1008,7 +991,7 @@ class Admin extends CI_Controller
 
 		if (!$this->base_model->has_permission(
 			$is_user,
-			['ویرایش کاربر', 'دسترسی کامل'],
+			['edit', 'full'],
 			'users'
 		)) {
 			$this->session->set_flashdata('err', 'شما دسترسی ویرایش کاربر را ندارید.');
@@ -1111,6 +1094,115 @@ class Admin extends CI_Controller
 		redirect('admin/edit_user/'.$id);
 	}
 
+	public function check_permissions($table_name){
+		$is_user = $this->session->userdata('id');
+		$permissions = [
+			'delete' => $this->base_model->has_permission($is_user, ['delete', 'full'],
+				'$table_name'),
+
+			'edit'   => $this->base_model->has_permission($is_user, ['edit', 'full'],
+				'$table_name'),
+
+			'add'    => $this->base_model->has_permission($is_user, ['insert', 'full'],
+				'$table_name'),
+
+			'view'    => $this->base_model->has_permission($is_user, ['view', 'full'],
+				'$table_name')
+		];
+
+		$data['permissions'] = $permissions;
+	}
+
+	public function permissions(){
+		$is_user = $this->session->userdata('id');
+		$permissions = [
+			'delete' => $this->base_model->has_permission($is_user, ['delete', 'full'],
+				'permissions'),
+
+			'edit'   => $this->base_model->has_permission($is_user, ['edit', 'full'],
+				'permissions'),
+
+			'add'    => $this->base_model->has_permission($is_user, ['insert', 'full'],
+				'permissions'),
+
+			'view'    => $this->base_model->has_permission($is_user, ['view', 'full'],
+				'permissions')
+		];
+
+		$data['permissions'] = $permissions;
+
+		$data['users']=$this->base_model->get_data('users','*');
+		$data['roles']=$this->base_model->get_data('roles','*');
+		$data['user_roles']=$this->base_model->get_data('user_roles','*');
+		$data['permissions']=$this->base_model->get_data('permissions','*');
+		$data['role_permissions']=$this->base_model->get_data('role_permissions','*');
+
+		$data['title']='تنظیمات دسترسی';
+		$this->load->view('admin/layout/header',$data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/permissions');
+	}
+
+	public function permissions_list()
+	{
+		$columns = [
+			null,
+			'permissions.name',
+			'permissions.key_name',
+			'permissions.table_name',
+			null
+		];
+		$table  = 'permissions';
+		$select = '
+        permissions.name,
+        permissions.key_name,
+        permissions.table_name AS table    
+    ';
+
+		$result = $this->base_model->datatable(
+			$table,
+			$columns,
+			$_POST,
+			$select,
+			null,
+			null,
+			['permissions.table_name' => 'ASC', 'permissions.key_name' => 'DESC']
+		);
+
+
+		$data = [];
+		foreach ($result['data'] as $row) {
+
+			$sub_array = [];
+
+			$sub_array[] = '';
+
+			// Permission name
+			$sub_array[] = htmlspecialchars($row->name);
+
+			// key_name
+			$sub_array[] = htmlspecialchars($row->key_name);
+
+			// table_name
+			$sub_array[] = htmlspecialchars($row->table);
+
+			// Checkbox
+			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check">';
+
+			$sub_array[] = '';
+
+			$data[] = $sub_array;
+		}
+
+		$output = [
+			"draw"            => intval($_POST["draw"]),
+			"recordsTotal"    => $result['recordsTotal'],
+			"recordsFiltered" => $result['recordsFiltered'],
+			"data"            => $data
+		];
+
+		echo json_encode($output);
+	}
 
 
 

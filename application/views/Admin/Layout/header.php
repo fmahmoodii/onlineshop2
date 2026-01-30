@@ -44,6 +44,11 @@
 	<script src="<?php echo base_url()?>assets/js/bootstrap-show-password.js"></script>
 
 
+	<link href="<?php echo base_url()?>assets/inTel/css/intlTelInput.css" rel="stylesheet" />
+	<script src="<?php echo base_url()?>assets/inTel/js/intlTelInput.min.js"></script>
+	<script src="<?php echo base_url()?>assets/inTel/js/utils.js"></script>
+
+
 	<script>
 		$("input[type='password']").password();
 

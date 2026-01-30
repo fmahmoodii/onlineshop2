@@ -331,7 +331,7 @@ class base_model extends CI_Model
 
 		// گرفتن همه پرمیشن‌های کاربر
 		$user_permissions = $this->db
-			->select('p.name, p.table_name')
+			->select('p.key_name, p.table_name')
 			->from('permissions p')
 			->join('role_permissions rp', 'rp.permission_id = p.id AND rp.isActive = 1', 'inner')
 			->where_in('rp.role_id', $role_ids)
@@ -342,11 +342,11 @@ class base_model extends CI_Model
 		// بررسی حداقل یکی از پرمیشن‌ها (OR)
 		foreach($user_permissions as $p){
 			if ($table_name) {
-				if ($p->table_name == $table_name && in_array($p->name, $permissions)) {
+				if ($p->table_name == $table_name && in_array($p->key_name, $permissions)) {
 					return true;
 				}
 			} else {
-				if (in_array($p->name, $permissions)) {
+				if (in_array($p->key_name, $permissions)) {
 					return true;
 				}
 			}
