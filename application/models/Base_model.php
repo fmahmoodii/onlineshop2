@@ -8,76 +8,94 @@ class base_model extends CI_Model
 		parent::__construct();
 	}
 
-	public function get_data($table, $select = '*', $where = NULL, $like = NULL, $or_where = NULL, $where_in = NULL, $order_by = NULL, $limit = NULL, $offset = NULL, $group_by = NULL, $join = NULL, $return_type = 'object', $include_deleted = false) {
+	function get_data($table, $select, $where=NULL, $like=NULL, $where_in=NULL, $where_not_in=NULL, $or_where=NULL, $join=NULL, $order_by=NULL, $limit=NULL, $offset=NULL, $group_by=NULL, $include_deleted = false)
+	{
 		$this->db->select($select);
+		$this->db->from($table);
 
-		// JOIN
-		if (!empty($join) && is_array($join)) {
-			foreach ($join as $tbl => $cond) {
-				if (is_array($cond)) {
-					$this->db->join($tbl, $cond[0], $cond[1] ?? 'left');
-				} else {
-					$this->db->join($tbl, $cond, 'left');
-				}
+		//Example: $where = ['id' => 5 , 'name' => 'A'];
+		if($where !=NULL)
+		{
+			$this -> db -> where($where);
+		}
+
+		//Example: $like = ['name' => 'A' , 'family' => 'B'];
+		if($like !=NULL)
+		{
+			foreach ($like as $col => $val) {
+				$this -> db -> like($col, $val);
 			}
 		}
 
-		// WHERE
-		if (!empty($where)) {
-			$this->db->where($where);
+		//Example: $where_in = ['id' => [1,2,3]];
+		if($where_in != NULL)
+		{
+			foreach ($where_in as $col => $vals) {
+				$this -> db -> where_in($col, $vals);
+			}
+		}
+
+		//Example: $where_not_in = ['status' => [0, 9]];
+		if($where_not_in != NULL)
+		{
+			foreach ($where_not_in as $col => $vals) {
+				$this -> db -> where_not_in($col, $vals);
+			}
+		}
+
+		//Example: $or_where = ['id' => 5 , 'name' => 'A'];
+		if($or_where != NULL)
+		{
+			foreach ($or_where as $col => $val) {
+				$this -> db -> or_where($col, $val);
+			}
+
+		}
+
+		//Example: $limit = 10, $offset = 20 (LIMIT 20, 10)
+		if ($limit !== NULL)
+		{
+			$this->db->limit($limit, $offset);
+		}
+
+		//Example: $join = [
+		//'roles' => 'roles.id = users.role_id',
+		//'profile' => 'profiles.user_id = users.id'
+		//];
+		if($join != NULL)
+		{
+			foreach($join as $tbl => $on)
+			{
+				$this -> db -> join($tbl, $on, 'left');
+			}
+		}
+
+		//Example: $order_by = ['id => 'DESC', 'name' => 'ASC'];
+		if($order_by != NULL)
+		{
+			foreach ($order_by as $col => $type) {
+				$this -> db -> order_by($col, $type);
+			}
+		}
+
+		//Example: $group_by = ['user_id', 'type']
+		if($group_by !=NULL)
+		{
+			$this -> db -> group_by($group_by);
 		}
 
 		// حذف نرم فقط اگر include_deleted = false
 		if (!$include_deleted) {
-			$fields = $this->db->list_fields($table);
-			if (in_array('deleted_at', $fields)) {
-				$this->db->where('deleted_at', NULL);
+			$fields = $this -> db -> list_fields($table);
+			if ( in_array('deleted_at', $fields) ) {
+				$this->db->where("$table.deleted_at", NULL);
 			}
 		}
 
-		// LIKE
-		if (!empty($like)) {
-			$this->db->like($like);
-		}
+		$query = $this->db->get();
 
-		// OR WHERE
-		if (!empty($or_where)) {
-			$this->db->or_where($or_where);
-		}
+		return $query -> result_object();
 
-		// WHERE IN
-		if (!empty($where_in) && is_array($where_in)) {
-			foreach ($where_in as $col => $values) {
-				if (is_array($values) && count($values) > 0) {
-					// فقط مقادیر غیر آرایه‌ای داخل آرایه رو می‌پذیریم
-					$filtered_values = array_filter($values, fn($v) => !is_array($v));
-					if (!empty($filtered_values)) {
-						$this->db->where_in($col, $filtered_values);
-					}
-				}
-			}
-		}
-
-		// GROUP BY
-		if (!empty($group_by)) {
-			$this->db->group_by($group_by);
-		}
-
-		// ORDER BY
-		if (!empty($order_by)) {
-			if (is_array($order_by)) {
-				foreach ($order_by as $col => $dir) {
-					$this->db->order_by($col, $dir);
-				}
-			} else {
-				$this->db->order_by($order_by);
-			}
-		}
-
-		// اجرای کوئری
-		$query = $this->db->get($table, $limit, $offset);
-
-		return $return_type === 'array' ? $query->result_array() : $query->result_object();
 	}
 
 	public function insert_data($table, $data, $batch = FALSE)
@@ -108,24 +126,32 @@ class base_model extends CI_Model
 			return FALSE;
 		}
 
-		// 🔹 حالت Batch Update (مثلاً چند رکورد با مقادیر متفاوت)
 		if ($batch === TRUE && $batch_index != NULL) {
-			$this->db->update_batch($table, $data, $batch_index);
+
+			$result = $this->db->update_batch($table, $data, $batch_index);
+
+			if ($result === FALSE) {
+				log_message('error', 'Update Batch Error: ' . $this->db->error()['message']);
+				return FALSE;
+			}
+
 		} else {
-			// 🔹 حالت آپدیت تکی یا بر اساس شرط خاص
+
 			if ($where != NULL) {
 				$this->db->where($where);
 			}
-			$this->db->update($table, $data);
+
+			$result = $this->db->update($table, $data);
+
+			if ($result === FALSE) {
+				log_message('error', 'Update Error: ' . $this->db->error()['message']);
+				return FALSE;
+			}
 		}
 
-		// ✅ بررسی موفقیت عملیات
-		if ($this->db->affected_rows() >= 0) {
-			return TRUE;
-		} else {
-			return FALSE;
-		}
+		return $this->db->affected_rows() > 0;
 	}
+
 
 	public function soft_delete($table, $where = NULL, $batch = FALSE, $batch_index = NULL)
 	{
@@ -139,7 +165,7 @@ class base_model extends CI_Model
 		if ($batch === TRUE && $batch_index != NULL) {
 
 			if (empty($where) || !is_array($where)) {
-				return FALSE; // ⛔ جلوگیری از حذف کل جدول
+				return FALSE; // ⛔ where اجباری برای batch
 			}
 
 			$data = [];
@@ -150,7 +176,13 @@ class base_model extends CI_Model
 				];
 			}
 
-			$this->db->update_batch($table, $data, $batch_index);
+			$result = $this->db->update_batch($table, $data, $batch_index);
+
+			// بررسی خطای دیتابیس
+			if ($result === FALSE) {
+				log_message('error', 'Soft Delete Batch Error: ' . $this->db->error()['message']);
+				return FALSE;
+			}
 
 		} else {
 
@@ -160,12 +192,19 @@ class base_model extends CI_Model
 			}
 
 			$this->db->where($where);
-			$this->db->update($table, [
+			$result = $this->db->update($table, [
 				'deleted_at' => $deletedAt
 			]);
+
+			// بررسی خطای دیتابیس
+			if ($result === FALSE) {
+				log_message('error', 'Soft Delete Error: ' . $this->db->error()['message']);
+				return FALSE;
+			}
 		}
 
-		return $this->db->affected_rows() >= 0;
+		// فقط اگه واقعاً ردیفی تغییر کرده باشه true برگردون
+		return $this->db->affected_rows() > 0;
 	}
 
 	public function delete_data($table, $where = NULL, $where_in = NULL)
@@ -203,14 +242,12 @@ class base_model extends CI_Model
 		$this->db->select($select);
 		$this->db->from($table);
 
-		// JOIN‌ها
-		if ($join != NULL && is_array($join)) {
-			foreach ($join as $tbl => $cond) {
-				if (is_array($cond)) {
-					$this->db->join($tbl, $cond[0], isset($cond[1]) ? $cond[1] : 'left');
-				} else {
-					$this->db->join($tbl, $cond, 'left');
-				}
+		// JOIN
+		if($join != NULL)
+		{
+			foreach($join as $tbl => $on)
+			{
+				$this->db->join($tbl, $on, 'left');
 			}
 		}
 
@@ -222,7 +259,7 @@ class base_model extends CI_Model
 		// اضافه کردن حذف نرم به صورت عمومی
 		$fields = $this->db->list_fields($table);
 		if (in_array('deleted_at', $fields)) {
-			$this->db->where('deleted_at', NULL);
+			$this->db->where("$table.deleted_at", NULL);
 		}
 
 		// ---- شمارش کل ----
@@ -356,11 +393,77 @@ class base_model extends CI_Model
 	}
 
 
-
-
-
-
-
+//	public function get_data2($table, $select = '*', $where = NULL, $like = NULL, $or_where = NULL, $where_in = NULL, $order_by = NULL, $limit = NULL, $offset = NULL, $group_by = NULL, $join = NULL, $return_type = 'object', $include_deleted = false) {
+//		$this->db->select($select);
+//
+//		// JOIN
+//		if (!empty($join) && is_array($join)) {
+//			foreach ($join as $tbl => $cond) {
+//				if (is_array($cond)) {
+//					$this->db->join($tbl, $cond[0], $cond[1] ?? 'left');
+//				} else {
+//					$this->db->join($tbl, $cond, 'left');
+//				}
+//			}
+//		}
+//
+//		// WHERE
+//		if (!empty($where)) {
+//			$this->db->where($where);
+//		}
+//
+//		// حذف نرم فقط اگر include_deleted = false
+//		if (!$include_deleted) {
+//			$fields = $this->db->list_fields($table);
+//			if (in_array('deleted_at', $fields)) {
+//				$this->db->where('deleted_at', NULL);
+//			}
+//		}
+//
+//		// LIKE
+//		if (!empty($like)) {
+//			$this->db->like($like);
+//		}
+//
+//		// OR WHERE
+//		if (!empty($or_where)) {
+//			$this->db->or_where($or_where);
+//		}
+//
+//		// WHERE IN
+//		if (!empty($where_in) && is_array($where_in)) {
+//			foreach ($where_in as $col => $values) {
+//				if (is_array($values) && count($values) > 0) {
+//					// فقط مقادیر غیر آرایه‌ای داخل آرایه رو می‌پذیریم
+//					$filtered_values = array_filter($values, fn($v) => !is_array($v));
+//					if (!empty($filtered_values)) {
+//						$this->db->where_in($col, $filtered_values);
+//					}
+//				}
+//			}
+//		}
+//
+//		// GROUP BY
+//		if (!empty($group_by)) {
+//			$this->db->group_by($group_by);
+//		}
+//
+//		// ORDER BY
+//		if (!empty($order_by)) {
+//			if (is_array($order_by)) {
+//				foreach ($order_by as $col => $dir) {
+//					$this->db->order_by($col, $dir);
+//				}
+//			} else {
+//				$this->db->order_by($order_by);
+//			}
+//		}
+//
+//		// اجرای کوئری
+//		$query = $this->db->get($table, $limit, $offset);
+//
+//		return $return_type === 'array' ? $query->result_array() : $query->result_object();
+//	}
 
 
 

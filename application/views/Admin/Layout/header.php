@@ -153,7 +153,7 @@
 		-mox-text-security:disc;
 	}
 
-	#inv_sup_data,#inv_attr_data,#inv_data,#attr_data,#ord_data,#prd_data,#cmnt_data,#off_data,#usr_data
+	#per_data,#inv_sup_data,#inv_attr_data,#inv_data,#attr_data,#ord_data,#prd_data,#cmnt_data,#off_data,#usr_data
 	,#size_data,#category1_data,#category2_data,#category_data,#cat-data {
 		font-size: 12px;
 		font-family: IRANSans;

@@ -57,6 +57,7 @@
 				<a href="<?php echo base_url()?>admin/sales"><li id="sales" >اطلاعات فروش</li></a>
 				<a href="<?php echo base_url()?>admin/comments" id="a-comments"><li id="comments">نظرات کاربران</li></a>
 				<a href="<?php echo base_url()?>admin/registered_users"><li id="registered_users" >لیست کاربران</li></a>
+				<a href="<?php echo base_url()?>admin/permissions"><li id="permissions" >دسترسی کاربران</li></a>
 				<a href="<?php echo base_url()?>admin/inventory"><li id="inventory" style="width: 200px;height: 40px;display: flex;
             align-items: center;justify-content: center;
             border: 1px solid #4e4e4e;position: relative;left: 40px;">انبارداری</li></a>

@@ -163,26 +163,29 @@
 			e.preventDefault();
 			alert('شما دسترسی انجام این عملیات را ندارید!');
 			return false;
-		}else {
-			var user_id = $(this).attr("user_id");
-			if (confirm('آیا از حذف کاربر اطمینان دارید؟')) {
-				$.ajax({
-					url: "<?php echo base_url(); ?>admin/soft_delete_user",
-					method: "POST",
-					data: {user_ids: [user_id]}, // ارسال به صورت آرایه
-					success: function (response) {
-						var res = JSON.parse(response);
+		}
 
-						if (res.status == 1) {
-							$('#usr_data').DataTable().ajax.reload(null, false);
-							showSnackbar('del');
-						} else {
-							alert(res.message ?? 'خطا در انجام عملیات');
-						}
+		var user_id = $(this).attr("user_id");
+
+		if (confirm('آیا از حذف کاربر اطمینان دارید؟')) {
+			$.ajax({
+				url: "<?php echo base_url(); ?>admin/soft_delete_user",
+				method: "POST",
+				data: {user_ids: [user_id]},
+				success: function (response) {
+					var res = JSON.parse(response);
+
+					if (res.status == 1) {
+						$('#usr_data').DataTable().ajax.reload(null, false);
+						showSnackbar('del');
+					} else {
+						alert(res.message ?? 'خطا در انجام عملیات');
 					}
-
-				});
-			}
+				},
+				error: function () {
+					alert('خطا در ارتباط با سرور');
+				}
+			});
 		}
 	});
 
@@ -193,33 +196,41 @@
 			user_ids.push($(this).attr("user_id"));
 		});
 
-		if(user_ids.length > 0) {
-
-				if (confirm('آیا از حذف کاربران انتخاب شده اطمینان دارید؟')) {
-					$.ajax({
-						type: "POST",
-						url: "<?php echo base_url(); ?>admin/soft_delete_user",
-						data: {user_ids: user_ids}, // ارسال همان آرایه
-						success: function (response) {
-							var res = JSON.parse(response);
-
-							if (res.status == 1) {
-								$('#usr_data').DataTable().ajax.reload(null, false);
-								showSnackbar('del');
-							} else {
-								showError(res.message);
-								// alert(res.message ?? 'شما دسترسی انجام این عملیات را ندارید');
-							}
-						}
-					});
-				}
-
-		} else {
+		if (user_ids.length === 0) {
 			alert('حداقل یک رکورد انتخاب کنید.');
+			return;
+		}
+
+		if (confirm('آیا از حذف کاربران انتخاب شده اطمینان دارید؟')) {
+			$.ajax({
+				type: "POST",
+				url: "<?php echo base_url(); ?>admin/soft_delete_user",
+				data: {user_ids: user_ids},
+				success: function (response) {
+					var res = JSON.parse(response);
+
+					if (res.status == 1) {
+						$('#usr_data').DataTable().ajax.reload(null, false);
+						showSnackbar('del');
+					} else {
+						alert(res.message ?? 'خطا در انجام عملیات');
+					}
+				},
+				error: function () {
+					alert('خطا در ارتباط با سرور');
+				}
+			});
 		}
 	});
 
-	$(document).on('click', '#active, #deactive', function(){
+	// فعالسازی/غیرفعالسازی تکی
+	$(document).on('click', '#active, #deactive', function(e){
+		if ($(this).data('no-permission')) {
+			e.preventDefault();
+			alert('شما دسترسی انجام این عملیات را ندارید!');
+			return false;
+		}
+
 		var user_id = $(this).attr('user_id');
 		var status = $(this).attr('id') === 'active' ? 1 : 0;
 
@@ -227,35 +238,52 @@
 			url: "<?= base_url('admin/toggle_user_status') ?>",
 			method: "POST",
 			data: { user_id: user_id, status: status },
-			success: function() {
-				$('#usr_data').DataTable().ajax.reload(null, false);
-				showSnackbar('upd'); // پیام فعال یا غیرفعال
+			success: function (response) {
+				var res = JSON.parse(response);
+				if (res.status == 1) {
+					$('#usr_data').DataTable().ajax.reload(null, false);
+					showSnackbar('upd');
+				} else {
+					alert(res.message ?? 'خطا در انجام عملیات');
+				}
+			},
+			error: function () {
+				alert('خطا در ارتباط با سرور');
 			}
 		});
 	});
 
+	// فعالسازی/غیرفعالسازی گروهی
 	$(document).on('click', '#active_selected, #deactive_selected', function(){
 		var user_ids = [];
 		$("input[name='row-check']:checked").each(function() {
 			user_ids.push($(this).attr('user_id'));
 		});
 
-		if(user_ids.length > 0){
-			// تعیین وضعیت بر اساس دکمه کلیک شده
-			var status = $(this).attr('id') === 'active_selected' ? 1 : 0;
-
-			$.ajax({
-				url: "<?= base_url('admin/toggle_user_status') ?>",
-				method: "POST",
-				data: { user_ids: user_ids, status: status },
-				success: function() {
-					$('#usr_data').DataTable().ajax.reload(null, false);
-					showSnackbar('upd'); // پیام گروهی
-				}
-			});
-		} else {
+		if (user_ids.length === 0) {
 			alert('حداقل یک رکورد انتخاب کنید.');
+			return;
 		}
+
+		var status = $(this).attr('id') === 'active_selected' ? 1 : 0;
+
+		$.ajax({
+			url: "<?= base_url('admin/toggle_user_status') ?>",
+			method: "POST",
+			data: { user_ids: user_ids, status: status },
+			success: function (response) {
+				var res = JSON.parse(response);
+				if (res.status == 1) {
+					$('#usr_data').DataTable().ajax.reload(null, false);
+					showSnackbar('upd');
+				} else {
+					alert(res.message ?? 'خطا در انجام عملیات');
+				}
+			},
+			error: function () {
+				alert('خطا در ارتباط با سرور');
+			}
+		});
 	});
 
 

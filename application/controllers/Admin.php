@@ -9,7 +9,22 @@ class Admin extends CI_Controller
 		$this->load->model('base_model');
 		$this->load->library('jalali_date'); // اجباری برای اطمینان از لود صحیح
 	}
+	protected function check_permission($permissions, $table = null)
+	{
+		$user_id = $this->session->userdata('id');
 
+		if (!$user_id) {
+			echo json_encode(['error' => 'unauthorized']);
+			exit;
+		}
+
+		if (!$this->base_model->has_permission($user_id, $permissions, $table)) {
+			echo json_encode(['error' => 'no_permission']);
+			exit;
+		}
+
+		return $user_id;
+	}
 	//<<--------------- date_shamsi_ghamari ---------------->>
 	public function date_j($miladi_date)
 	{
@@ -72,9 +87,7 @@ class Admin extends CI_Controller
 
 
 		// 1) دریافت کاربر
-		$users = $this->base_model->get_data('users', '*', [
-			'phone_number' => $username
-		]);
+		$users = $this->base_model->get_data('users', '*', array('phone_number' => $username));
 
 		if (empty($users)) {
 			$this->base_model->add_log(
@@ -154,6 +167,7 @@ class Admin extends CI_Controller
 
 
 		// 5) ورود موفق
+		$this->session->sess_regenerate(TRUE);
 		$this->session->set_userdata('id', $users->id);
 
 		$this->base_model->add_log(
@@ -170,7 +184,6 @@ class Admin extends CI_Controller
 		return redirect('admin');
 	}
 
-
 	// 🚪 خروج از حساب
 	public function logout()
 	{
@@ -180,7 +193,7 @@ class Admin extends CI_Controller
 		if ($user_id) {
 
 			// گرفتن اطلاعات کاربر
-			$user = $this->base_model->get_data('users', 'phone_number', ['id' => $user_id]);
+			$user = $this->base_model->get_data('users', 'phone_number', array('id' => $user_id));
 			$username = isset($user[0]) ? $user[0]->phone_number : 'نامشخص';
 
 			$group_id = uniqid('grp_', true);
@@ -206,46 +219,49 @@ class Admin extends CI_Controller
 
 	public function registered_users()
 	{
-		$is_user = $this->session->userdata('id');
+		if (!$this->session->userdata('id')) {
+			redirect('admin/login_page');
+			return;
+		}
 
-		// ⛔ چک VIEW ماژول
-		if (!$this->base_model->has_permission(
-			$is_user,
-			['view', 'full'],
-			'users'
-		)) {
-			/*show_error('دسترسی غیرمجاز', 403);*/
+		$user_id = $this->session->userdata('id');
+		$has_view = $this->base_model->has_permission($user_id, ['view','full'], 'users');
+
+		if (!$has_view)
+		{
 			$data['title'] = 'دسترسی غیرمجاز';
-			$data['profile']=$this->base_model->get_data('profile','*');
-			$data['users']=$this->base_model->get_data('users','*');
-			$data['roles']=$this->base_model->get_data('roles','*');
-			$data['user_roles']=$this->base_model->get_data('user_roles','*');
 			$this->load->view('admin/layout/header', $data);
 			$this->load->view('admin/layout/sidebar');
 			$this->load->view('admin/errors/no_permission');
-		}else{
+			return;
+		}
 
-		// permissionهای عملیاتی
-		$permissions = [
-			'add'    => $this->base_model->has_permission($is_user, ['insert', 'full'], 'users'),
-			'edit'   => $this->base_model->has_permission($is_user, ['edit', 'full'], 'users'),
-			'delete' => $this->base_model->has_permission($is_user, ['delete', 'full'], 'users'),
+		// فقط وقتی permission داره، query ها رو اجرا کن
+		$data = [];
+		$data['profile']     = $this->base_model->get_data('profile','*');
+		$data['users']       = $this->base_model->get_data('users','*');
+		$data['roles']       = $this->base_model->get_data('roles','*');
+		$data['user_roles']  = $this->base_model->get_data('user_roles','*');
+
+		$data['permissions'] = [
+			'add'    => $this->base_model->has_permission($user_id, ['insert','full'], 'users'),
+			'edit'   => $this->base_model->has_permission($user_id, ['edit','full'], 'users'),
+			'delete' => $this->base_model->has_permission($user_id, ['delete','full'], 'users'),
 		];
 
-		$data['permissions'] = $permissions;
 		$data['title'] = 'کاربران';
-		$data['profile']=$this->base_model->get_data('profile','*');
-		$data['users']=$this->base_model->get_data('users','*');
-		$data['roles']=$this->base_model->get_data('roles','*');
-		$data['user_roles']=$this->base_model->get_data('user_roles','*');
 
 		$this->load->view('admin/layout/header', $data);
 		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/registered-users');}
+		$this->load->view('admin/registered-users');
 	}
 
 	public function users_list()
 	{
+		$user_id = $this->check_permission(['view', 'full'], 'users');
+
+		$post_data = $this->input->post(NULL, TRUE);
+
 		$columns = [
 			null,
 			'roles.name',
@@ -279,25 +295,19 @@ class Admin extends CI_Controller
 		$result = $this->base_model->datatable(
 			$table,
 			$columns,
-			$_POST,
+			$post_data,
 			$select,
 			$join,
 			null,
 			['users.id' => 'DESC']
 		);
 
-		$is_user = $this->session->userdata('id');
 		$permissions = [
-			'delete' => $this->base_model->has_permission($is_user, ['delete', 'full'],
-				'users'),
-
-			'edit'   => $this->base_model->has_permission($is_user, ['edit', 'full'],
-				'users'),
-
-			'add'    => $this->base_model->has_permission($is_user, ['insert', 'full'],
-				'users')
+			'delete' => $this->base_model->has_permission($user_id, ['delete', 'full'], 'users'),
+			'edit'   => $this->base_model->has_permission($user_id, ['edit', 'full'], 'users'),
+			'add'    => $this->base_model->has_permission($user_id, ['insert', 'full'], 'users')
 		];
-		
+
 		$data = [];
 		foreach ($result['data'] as $row) {
 
@@ -305,8 +315,8 @@ class Admin extends CI_Controller
 
 			// Checkbox
 			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check"
-                        user_id="'.htmlspecialchars($row->user_id).'"
-                        id_prof="'.htmlspecialchars($row->profile_id).'">';
+                    user_id="'.htmlspecialchars($row->user_id).'"
+                    id_prof="'.htmlspecialchars($row->profile_id).'">';
 
 			// Role
 			$sub_array[] = htmlspecialchars($row->role);
@@ -330,7 +340,6 @@ class Admin extends CI_Controller
 			// Reset password
 			$sub_array[] = '<button type="button" id="reset" user_id="'.$row->user_id.'" id_prof="'.$row->profile_id.'" class="btn btn-info"><i class="fa fa-key"></i></button>';
 
-
 			// Edit
 			$sub_array[] = '<a href="'.base_url('admin/edit_user/'.$row->user_id).'">
             <button class="btn btn-warning edit-btn" '.($permissions['edit'] ? '' : 'data-no-permission="true"').'>
@@ -346,7 +355,7 @@ class Admin extends CI_Controller
 		}
 
 		$output = [
-			"draw"            => intval($_POST["draw"]),
+			"draw"            => isset($post_data['draw']) ? intval($post_data['draw']) : 0,
 			"recordsTotal"    => $result['recordsTotal'],
 			"recordsFiltered" => $result['recordsFiltered'],
 			"data"            => $data
@@ -358,22 +367,12 @@ class Admin extends CI_Controller
 	public function soft_delete_user()
 	{
 		// 1️⃣ چک دسترسی
-		$is_user = $this->session->userdata('id');
-
-		if (!$this->base_model->has_permission(
-			$is_user,
-			['delete', 'full'],
-			'users'
-		)) {
-			echo json_encode([
-				'status'  => 0,
-				'message' => 'شما دسترسی حذف کاربر را ندارید'
-			]);
-			return;
-		}
+		$is_user = $this->check_permission(['delete', 'full'], 'users', true);
 
 		// 2️⃣ اعتبارسنجی ورودی
-		if (!$_POST || !isset($_POST['user_ids']) || !is_array($_POST['user_ids'])) {
+		$post_data = $this->input->post(NULL, TRUE);
+
+		if (empty($post_data) || !isset($post_data['user_ids']) || !is_array($post_data['user_ids'])) {
 			echo json_encode([
 				'status'  => 0,
 				'message' => 'داده نامعتبر است'
@@ -381,7 +380,7 @@ class Admin extends CI_Controller
 			return;
 		}
 
-		$user_ids = $_POST['user_ids'];
+		$user_ids = $post_data['user_ids'];
 
 		// 3️⃣ جلوگیری از حذف خود کاربر لاگین‌شده
 		if (in_array($is_user, $user_ids)) {
@@ -392,12 +391,14 @@ class Admin extends CI_Controller
 			return;
 		}
 
-		// (اختیاری) جلوگیری از حذف کاربر سیستمی
-		$protected_users = [1]; // user_id سیستمی
+		// 4️⃣ جلوگیری از حذف کاربر محافظت‌شده
+		$protected = $this->base_model->get_data('users', 'id', ['is_protected' => 1]);
+		$protected_users = array_column($protected, 'id');
+
 		if (array_intersect($protected_users, $user_ids)) {
 			echo json_encode([
 				'status'  => 0,
-				'message' => 'امکان حذف کاربر سیستمی وجود ندارد'
+				'message' => 'امکان حذف این کاربر وجود ندارد'
 			]);
 			return;
 		}
@@ -405,23 +406,31 @@ class Admin extends CI_Controller
 		$group_id      = uniqid('grp_', true);
 		$operationInfo = "حذف کاربران";
 
-		// گرفتن اطلاعات قبل از حذف
-		$users = $this->base_model->get_data('users', '*', null, null, null, ['id' => $user_ids]);
-		$profiles = $this->base_model->get_data('profile', '*', null, null, null, ['user_id' => $user_ids]);
-		$user_roles = $this->base_model->get_data('user_roles', '*', null, null, null, ['user_id' => $user_ids]);
+		// 5️⃣ گرفتن اطلاعات قبل از حذف
+		$users      = $this->base_model->get_data('users', '*', null, null, ['id' => $user_ids]);
+		$profiles   = $this->base_model->get_data('profile', '*', null, null, ['user_id' => $user_ids]);
+		$user_roles = $this->base_model->get_data('user_roles', '*', null, null, ['user_id' => $user_ids]);
 
-		// map پروفایل
+		if (empty($users)) {
+			echo json_encode([
+				'status'  => 0,
+				'message' => 'کاربر مورد نظر یافت نشد'
+			]);
+			return;
+		}
+
+		// map پروفایل بر اساس user_id
 		$profileMap = [];
 		foreach ($profiles as $p) {
 			$profileMap[$p->user_id] = $p;
 		}
 
-		// 4️⃣ حذف با transaction
+		// 6️⃣ حذف نرم با transaction
 		$this->db->trans_start();
 
-		$this->db->where_in('user_id', $user_ids)->delete('profile');
-		$this->db->where_in('user_id', $user_ids)->delete('user_roles');
-		$this->db->where_in('id', $user_ids)->delete('users');
+		$this->base_model->soft_delete('profile', $user_ids, true, 'user_id');
+		$this->base_model->soft_delete('user_roles', $user_ids, true, 'user_id');
+		$this->base_model->soft_delete('users', $user_ids, true, 'id');
 
 		$this->db->trans_complete();
 
@@ -433,17 +442,20 @@ class Admin extends CI_Controller
 			return;
 		}
 
-		// 5️⃣ ثبت لاگ‌ها
+		// 7️⃣ ثبت لاگ‌ها
 		foreach ($users as $user) {
 			$fullName = isset($profileMap[$user->id])
 				? $profileMap[$user->id]->name . ' ' . $profileMap[$user->id]->family
 				: 'نامشخص';
 
+			$userData = (array)$user;
+			unset($userData['password']);
+
 			$this->base_model->add_log(
 				'users',
 				$user->id,
-				'delete',
-				(array)$user,
+				'soft_delete',
+				$userData,
 				null,
 				'حذف کاربر: ' . $fullName,
 				$group_id,
@@ -455,28 +467,30 @@ class Admin extends CI_Controller
 			$this->base_model->add_log(
 				'profile',
 				$p->id,
-				'delete',
+				'soft_delete',
 				(array)$p,
 				null,
-				'حذف کاربر: ' . $p->name . ' ' . $p->family,
+				'حذف پروفایل کاربر: ' . $p->name . ' ' . $p->family,
 				$group_id,
 				$operationInfo
 			);
 		}
 
 		foreach ($user_roles as $ur) {
-			$fullName = isset($profileMap[$user->id])
-				? $profileMap[$user->id]->name . ' ' . $profileMap[$user->id]->family
+			$fullName = isset($profileMap[$ur->user_id])
+				? $profileMap[$ur->user_id]->name . ' ' . $profileMap[$ur->user_id]->family
 				: 'نامشخص';
 
 			$this->base_model->add_log(
 				'user_roles',
 				$ur->id,
-				'delete',
+				'soft_delete',
 				(array)$ur,
-				null, 'حذف نقش کاربر با user_id: ' . $fullName,
+				null,
+				'حذف نقش کاربر: ' . $fullName,
 				$group_id,
-				$operationInfo );
+				$operationInfo
+			);
 		}
 
 		echo json_encode([
@@ -484,201 +498,96 @@ class Admin extends CI_Controller
 		]);
 	}
 
-	/*public function delete_user()
+	public function toggle_user_status()
 	{
 		// 1️⃣ چک دسترسی
-		$is_user = $this->session->userdata('id');
+		$logged_user_id = $this->check_permission(['edit', 'full'], 'users', true);
 
-		if (!$this->base_model->has_permission(
-			$is_user,
-			['حذف کاربر', 'دسترسی کامل'],
-			'users'
-		)) {
-			echo json_encode([
-				'status'  => 0,
-				'message' => 'شما دسترسی حذف کاربر را ندارید'
-			]);
+		// 2️⃣ دریافت ورودی
+		$post_data = $this->input->post(NULL, TRUE);
+
+		if (empty($post_data)) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
 			return;
 		}
 
-		// 2️⃣ اعتبارسنجی ورودی
-		if (!$_POST || !isset($_POST['user_ids']) || !is_array($_POST['user_ids'])) {
-			echo json_encode([
-				'status'  => 0,
-				'message' => 'داده نامعتبر است'
-			]);
+		if (isset($post_data['user_ids']) && is_array($post_data['user_ids'])) {
+			$user_ids = $post_data['user_ids'];
+		} elseif (isset($post_data['user_id'])) {
+			$user_ids = [$post_data['user_id']];
+		} else {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
 			return;
 		}
 
-		$user_ids = $_POST['user_ids'];
-
-		// 3️⃣ جلوگیری از حذف خود کاربر لاگین‌شده
-		if (in_array($is_user, $user_ids)) {
-			echo json_encode([
-				'status'  => 0,
-				'message' => 'امکان حذف حساب کاربری خودتان وجود ندارد'
-			]);
+		if (empty($user_ids)) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
 			return;
 		}
 
-		// (اختیاری) جلوگیری از حذف کاربر سیستمی
-		$protected_users = [1]; // user_id سیستمی
+		$status = isset($post_data['status']) ? intval($post_data['status']) : 1;
+
+		// 3️⃣ جلوگیری از تغییر وضعیت خود کاربر لاگین‌شده
+		if (in_array($logged_user_id, $user_ids)) {
+			echo json_encode(['status' => 0, 'message' => 'امکان تغییر وضعیت حساب کاربری خودتان وجود ندارد']);
+			return;
+		}
+
+		// 4️⃣ جلوگیری از تغییر وضعیت کاربر محافظت‌شده
+		$protected = $this->base_model->get_data('users', 'id', ['is_protected' => 1]);
+		$protected_users = array_column($protected, 'id');
+
 		if (array_intersect($protected_users, $user_ids)) {
-			echo json_encode([
-				'status'  => 0,
-				'message' => 'امکان حذف کاربر سیستمی وجود ندارد'
-			]);
+			echo json_encode(['status' => 0, 'message' => 'امکان تغییر وضعیت این کاربر وجود ندارد']);
+			return;
+		}
+
+		// 5️⃣ گرفتن اطلاعات قبل از تغییر
+		$users_before = $this->base_model->get_data('users', '*', NULL, NULL, ['id' => $user_ids]);
+
+		if (empty($users_before)) {
+			echo json_encode(['status' => 0, 'message' => 'کاربر مورد نظر یافت نشد']);
 			return;
 		}
 
 		$group_id      = uniqid('grp_', true);
-		$operationInfo = "حذف کاربران";
+		$operationInfo = "تغییر وضعیت کاربران";
 
-		// گرفتن اطلاعات قبل از حذف
-		$users = $this->base_model->get_data('users', '*', null, null, null, ['id' => $user_ids]);
-		$profiles = $this->base_model->get_data('profile', '*', null, null, null, ['user_id' => $user_ids]);
-		$user_roles = $this->base_model->get_data('user_roles', '*', null, null, null, ['user_id' => $user_ids]);
-
-		// map پروفایل
-		$profileMap = [];
-		foreach ($profiles as $p) {
-			$profileMap[$p->user_id] = $p;
-		}
-
-		// 4️⃣ حذف با transaction
+		// 6️⃣ آپدیت با Transaction
 		$this->db->trans_start();
 
-		$this->db->where_in('user_id', $user_ids)->delete('profile');
-		$this->db->where_in('user_id', $user_ids)->delete('user_roles');
-		$this->db->where_in('id', $user_ids)->delete('users');
+		foreach ($users_before as $user) {
+			$this->base_model->update_data('users', ['isActive' => $status], ['id' => $user->id]);
+		}
 
 		$this->db->trans_complete();
 
 		if ($this->db->trans_status() === FALSE) {
-			echo json_encode([
-				'status'  => 0,
-				'message' => 'خطا در حذف کاربران'
-			]);
+			echo json_encode(['status' => 0, 'message' => 'خطا در تغییر وضعیت کاربران']);
 			return;
 		}
 
-		// 5️⃣ ثبت لاگ‌ها
-		foreach ($users as $user) {
-			$fullName = isset($profileMap[$user->id])
-				? $profileMap[$user->id]->name . ' ' . $profileMap[$user->id]->family
-				: 'نامشخص';
+		// 7️⃣ ثبت لاگ‌ها
+		foreach ($users_before as $user) {
+			$old_value = ['isActive' => $user->isActive];
+			$new_value = ['isActive' => $status];
+
+			$details = ($status ? 'فعالسازی ' : 'غیرفعالسازی ') .
+				'کاربر با شماره موبایل: ' . $user->phone_number;
 
 			$this->base_model->add_log(
 				'users',
 				$user->id,
-				'delete',
-				(array)$user,
-				null,
-				'حذف کاربر: ' . $fullName,
+				'update_status',
+				$old_value,
+				$new_value,
+				$details,
 				$group_id,
 				$operationInfo
 			);
 		}
 
-		foreach ($profiles as $p) {
-			$this->base_model->add_log(
-				'profile',
-				$p->id,
-				'delete',
-				(array)$p,
-				null,
-				'حذف کاربر: ' . $p->name . ' ' . $p->family,
-				$group_id,
-				$operationInfo
-			);
-		}
-
-		foreach ($user_roles as $ur) {
-			$fullName = isset($profileMap[$user->id])
-				? $profileMap[$user->id]->name . ' ' . $profileMap[$user->id]->family
-				: 'نامشخص';
-
-			$this->base_model->add_log(
-				'user_roles',
-				$ur->id,
-				'delete',
-				(array)$ur,
-				null, 'حذف نقش کاربر با user_id: ' . $fullName,
-				$group_id,
-				$operationInfo );
-		}
-
-		echo json_encode([
-			'status' => 1
-		]);
-	}*/
-
-	function toggle_user_status()
-	{
-		if ($_POST) {
-
-			$user_ids = [];
-
-			// چند انتخابی
-			if ($_POST['user_ids'] && is_array($_POST['user_ids'])) {
-				$user_ids = $_POST['user_ids'];
-			}
-
-			// تکی
-			if ($_POST['user_id']) {
-				$user_ids[] = $_POST['user_id'];
-			}
-
-			if (!empty($user_ids)) {
-
-				$status = isset($_POST['status']) ? intval($_POST['status']) : 1;
-
-				$group_id = uniqid('grp_', true);
-				$operationInfo = "تغییر وضعیت کاربران";
-
-				// گرفتن اطلاعات قبل از تغییر
-				$users_before = $this->base_model->get_data('users', '*', NULL, NULL, NULL, ['id' => $user_ids]);
-
-				foreach ($users_before as $user) {
-
-					// old_value فقط همان فیلد تغییر یافته
-					$old_value = [
-						'isActive' => $user->isActive
-					];
-
-					// آپدیت
-					$this->base_model->update_data('users', ['isActive' => $status], ['id' => $user->id]);
-
-					// مقدار جدید
-					$new_value = [
-						'isActive' => $status
-					];
-
-					// توضیحات لاگ
-					$details =
-						($status ? 'فعالسازی ' : 'غیرفعالسازی ') .
-						'کاربر با شماره موبایل: ' . $user->phone_number;
-
-					// ثبت در لاگ
-					$this->base_model->add_log(
-						'users',
-						$user->id,
-						'update_status',
-						$old_value,
-						$new_value,
-						$details,
-						$group_id,
-						$operationInfo
-					);
-				}
-
-				echo 1;
-			} else {
-				echo 0;
-			}
-		} else {
-			echo 0;
-		}
+		echo json_encode(['status' => 1]);
 	}
 
 	public function reset_pass()
@@ -1150,13 +1059,16 @@ class Admin extends CI_Controller
 			'permissions.name',
 			'permissions.key_name',
 			'permissions.table_name',
+			null,
 			null
 		];
 		$table  = 'permissions';
 		$select = '
+        permissions.id,
         permissions.name,
         permissions.key_name,
-        permissions.table_name AS table    
+        permissions.table_name AS table,    
+        permissions.isActive    
     ';
 
 		$result = $this->base_model->datatable(
@@ -1175,7 +1087,8 @@ class Admin extends CI_Controller
 
 			$sub_array = [];
 
-			$sub_array[] = '';
+			// Checkbox
+			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check">';
 
 			// Permission name
 			$sub_array[] = htmlspecialchars($row->name);
@@ -1186,8 +1099,10 @@ class Admin extends CI_Controller
 			// table_name
 			$sub_array[] = htmlspecialchars($row->table);
 
-			// Checkbox
-			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check">';
+			// Active / Deactive button
+			$sub_array[] = ($row->isActive == 0)
+				? '<button type="button" id="active" prm_id="'.$row->id.'" class="btn btn-primary btn-xs">فعالسازی</button>'
+				: '<button type="button" id="deactive" prm_id="'.$row->id.'" class="btn btn-secondry btn-xs">غیرفعالسازی</button>';
 
 			$sub_array[] = '';
 
@@ -1204,7 +1119,134 @@ class Admin extends CI_Controller
 		echo json_encode($output);
 	}
 
+	/*public function delete_user()
+		{
+			// 1️⃣ چک دسترسی
+			$is_user = $this->session->userdata('id');
 
+			if (!$this->base_model->has_permission(
+				$is_user,
+				['حذف کاربر', 'دسترسی کامل'],
+				'users'
+			)) {
+				echo json_encode([
+					'status'  => 0,
+					'message' => 'شما دسترسی حذف کاربر را ندارید'
+				]);
+				return;
+			}
+
+			// 2️⃣ اعتبارسنجی ورودی
+			if (!$_POST || !isset($_POST['user_ids']) || !is_array($_POST['user_ids'])) {
+				echo json_encode([
+					'status'  => 0,
+					'message' => 'داده نامعتبر است'
+				]);
+				return;
+			}
+
+			$user_ids = $_POST['user_ids'];
+
+			// 3️⃣ جلوگیری از حذف خود کاربر لاگین‌شده
+			if (in_array($is_user, $user_ids)) {
+				echo json_encode([
+					'status'  => 0,
+					'message' => 'امکان حذف حساب کاربری خودتان وجود ندارد'
+				]);
+				return;
+			}
+
+			// (اختیاری) جلوگیری از حذف کاربر سیستمی
+			$protected_users = [1]; // user_id سیستمی
+			if (array_intersect($protected_users, $user_ids)) {
+				echo json_encode([
+					'status'  => 0,
+					'message' => 'امکان حذف کاربر سیستمی وجود ندارد'
+				]);
+				return;
+			}
+
+			$group_id      = uniqid('grp_', true);
+			$operationInfo = "حذف کاربران";
+
+			// گرفتن اطلاعات قبل از حذف
+			$users = $this->base_model->get_data('users', '*', null, null, null, ['id' => $user_ids]);
+			$profiles = $this->base_model->get_data('profile', '*', null, null, null, ['user_id' => $user_ids]);
+			$user_roles = $this->base_model->get_data('user_roles', '*', null, null, null, ['user_id' => $user_ids]);
+
+			// map پروفایل
+			$profileMap = [];
+			foreach ($profiles as $p) {
+				$profileMap[$p->user_id] = $p;
+			}
+
+			// 4️⃣ حذف با transaction
+			$this->db->trans_start();
+
+			$this->db->where_in('user_id', $user_ids)->delete('profile');
+			$this->db->where_in('user_id', $user_ids)->delete('user_roles');
+			$this->db->where_in('id', $user_ids)->delete('users');
+
+			$this->db->trans_complete();
+
+			if ($this->db->trans_status() === FALSE) {
+				echo json_encode([
+					'status'  => 0,
+					'message' => 'خطا در حذف کاربران'
+				]);
+				return;
+			}
+
+			// 5️⃣ ثبت لاگ‌ها
+			foreach ($users as $user) {
+				$fullName = isset($profileMap[$user->id])
+					? $profileMap[$user->id]->name . ' ' . $profileMap[$user->id]->family
+					: 'نامشخص';
+
+				$this->base_model->add_log(
+					'users',
+					$user->id,
+					'delete',
+					(array)$user,
+					null,
+					'حذف کاربر: ' . $fullName,
+					$group_id,
+					$operationInfo
+				);
+			}
+
+			foreach ($profiles as $p) {
+				$this->base_model->add_log(
+					'profile',
+					$p->id,
+					'delete',
+					(array)$p,
+					null,
+					'حذف کاربر: ' . $p->name . ' ' . $p->family,
+					$group_id,
+					$operationInfo
+				);
+			}
+
+			foreach ($user_roles as $ur) {
+				$fullName = isset($profileMap[$user->id])
+					? $profileMap[$user->id]->name . ' ' . $profileMap[$user->id]->family
+					: 'نامشخص';
+
+				$this->base_model->add_log(
+					'user_roles',
+					$ur->id,
+					'delete',
+					(array)$ur,
+					null, 'حذف نقش کاربر با user_id: ' . $fullName,
+					$group_id,
+					$operationInfo );
+			}
+
+			echo json_encode([
+				'status' => 1
+			]);
+		}*/
 
 
 
