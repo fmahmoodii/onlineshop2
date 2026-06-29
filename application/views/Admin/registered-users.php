@@ -137,6 +137,16 @@
 		});
 	});
 
+	function handleAjaxResponse(res, onSuccess) {
+		if (res.status == 1) {
+			onSuccess();
+		} else if (res.message === 'session_expired') {
+			alert('نشست شما منقضی شده است. لطفا دوباره وارد شوید.');
+			window.location.href = "<?= base_url('admin/login_page') ?>";
+		} else {
+			alert(res.message ?? 'خطا در انجام عملیات');
+		}
+	}
 
 	function showSnackbar(type) {
 		// type: 'del', 'ins', 'upd'
@@ -174,13 +184,10 @@
 				data: {user_ids: [user_id]},
 				success: function (response) {
 					var res = JSON.parse(response);
-
-					if (res.status == 1) {
+					handleAjaxResponse(res, function() {
 						$('#usr_data').DataTable().ajax.reload(null, false);
 						showSnackbar('del');
-					} else {
-						alert(res.message ?? 'خطا در انجام عملیات');
-					}
+					});
 				},
 				error: function () {
 					alert('خطا در ارتباط با سرور');
@@ -208,13 +215,10 @@
 				data: {user_ids: user_ids},
 				success: function (response) {
 					var res = JSON.parse(response);
-
-					if (res.status == 1) {
+					handleAjaxResponse(res, function() {
 						$('#usr_data').DataTable().ajax.reload(null, false);
 						showSnackbar('del');
-					} else {
-						alert(res.message ?? 'خطا در انجام عملیات');
-					}
+					});
 				},
 				error: function () {
 					alert('خطا در ارتباط با سرور');
@@ -225,12 +229,6 @@
 
 	// فعالسازی/غیرفعالسازی تکی
 	$(document).on('click', '#active, #deactive', function(e){
-		if ($(this).data('no-permission')) {
-			e.preventDefault();
-			alert('شما دسترسی انجام این عملیات را ندارید!');
-			return false;
-		}
-
 		var user_id = $(this).attr('user_id');
 		var status = $(this).attr('id') === 'active' ? 1 : 0;
 
@@ -240,12 +238,10 @@
 			data: { user_id: user_id, status: status },
 			success: function (response) {
 				var res = JSON.parse(response);
-				if (res.status == 1) {
+				handleAjaxResponse(res, function() {
 					$('#usr_data').DataTable().ajax.reload(null, false);
 					showSnackbar('upd');
-				} else {
-					alert(res.message ?? 'خطا در انجام عملیات');
-				}
+				});
 			},
 			error: function () {
 				alert('خطا در ارتباط با سرور');
@@ -273,12 +269,10 @@
 			data: { user_ids: user_ids, status: status },
 			success: function (response) {
 				var res = JSON.parse(response);
-				if (res.status == 1) {
+				handleAjaxResponse(res, function() {
 					$('#usr_data').DataTable().ajax.reload(null, false);
 					showSnackbar('upd');
-				} else {
-					alert(res.message ?? 'خطا در انجام عملیات');
-				}
+				});
 			},
 			error: function () {
 				alert('خطا در ارتباط با سرور');

@@ -14,16 +14,33 @@ class Admin extends CI_Controller
 		$user_id = $this->session->userdata('id');
 
 		if (!$user_id) {
-			echo json_encode(['error' => 'unauthorized']);
+			echo json_encode(['status' => 0, 'message' => 'session_expired']);
 			exit;
 		}
 
 		if (!$this->base_model->has_permission($user_id, $permissions, $table)) {
-			echo json_encode(['error' => 'no_permission']);
+			echo json_encode(['status' => 0, 'message' => 'شما دسترسی انجام این عملیات را ندارید']);
 			exit;
 		}
 
 		return $user_id;
+	}
+	protected function get_protected_user_ids()
+	{
+		// کاربرانی که فلگ is_protected دارن
+		$protected = $this->base_model->get_data('users', 'id', ['is_protected' => 1]);
+		$protected_users = array_column($protected, 'id');
+
+		// کاربرانی که role ادمین دارن
+		$admin_role = $this->base_model->get_data('roles', 'id', ['role_name' => 'ادمین']);
+
+		if (!empty($admin_role)) {
+			$admin_role_id = $admin_role[0]->id;
+			$admin_users = $this->base_model->get_data('user_roles', 'user_id', ['role_id' => $admin_role_id]);
+			$protected_users = array_merge($protected_users, array_column($admin_users, 'user_id'));
+		}
+
+		return array_unique($protected_users);
 	}
 	//<<--------------- date_shamsi_ghamari ---------------->>
 	public function date_j($miladi_date)
@@ -367,7 +384,7 @@ class Admin extends CI_Controller
 	public function soft_delete_user()
 	{
 		// 1️⃣ چک دسترسی
-		$is_user = $this->check_permission(['delete', 'full'], 'users', true);
+		$is_user = $this->check_permission(['delete', 'full'], 'users');
 
 		// 2️⃣ اعتبارسنجی ورودی
 		$post_data = $this->input->post(NULL, TRUE);
@@ -392,14 +409,10 @@ class Admin extends CI_Controller
 		}
 
 		// 4️⃣ جلوگیری از حذف کاربر محافظت‌شده
-		$protected = $this->base_model->get_data('users', 'id', ['is_protected' => 1]);
-		$protected_users = array_column($protected, 'id');
+		$protected_users = $this->get_protected_user_ids();
 
 		if (array_intersect($protected_users, $user_ids)) {
-			echo json_encode([
-				'status'  => 0,
-				'message' => 'امکان حذف این کاربر وجود ندارد'
-			]);
+			echo json_encode(['status' => 0, 'message' => 'امکان حذف این کاربر وجود ندارد']);
 			return;
 		}
 
@@ -534,8 +547,7 @@ class Admin extends CI_Controller
 		}
 
 		// 4️⃣ جلوگیری از تغییر وضعیت کاربر محافظت‌شده
-		$protected = $this->base_model->get_data('users', 'id', ['is_protected' => 1]);
-		$protected_users = array_column($protected, 'id');
+		$protected_users = $this->get_protected_user_ids();
 
 		if (array_intersect($protected_users, $user_ids)) {
 			echo json_encode(['status' => 0, 'message' => 'امکان تغییر وضعیت این کاربر وجود ندارد']);
