@@ -167,6 +167,29 @@
 		}
 	});
 
+	//حذف کاربر
+	function deleteUsers(user_ids, confirmMessage) {
+		if (!confirm(confirmMessage)) {
+			return;
+		}
+
+		$.ajax({
+			type: "POST",
+			url: "<?php echo base_url(); ?>admin/soft_delete_user",
+			data: {user_ids: user_ids},
+			success: function (response) {
+				var res = JSON.parse(response);
+				handleAjaxResponse(res, function() {
+					$('#usr_data').DataTable().ajax.reload(null, false);
+					showSnackbar('del');
+				});
+			},
+			error: function () {
+				alert('خطا در ارتباط با سرور');
+			}
+		});
+	}
+
 	// حذف تکی
 	$(document).on('click', '#delete', function(e){
 		if ($(this).data('no-permission')) {
@@ -176,27 +199,10 @@
 		}
 
 		var user_id = $(this).attr("user_id");
-
-		if (confirm('آیا از حذف کاربر اطمینان دارید؟')) {
-			$.ajax({
-				url: "<?php echo base_url(); ?>admin/soft_delete_user",
-				method: "POST",
-				data: {user_ids: [user_id]},
-				success: function (response) {
-					var res = JSON.parse(response);
-					handleAjaxResponse(res, function() {
-						$('#usr_data').DataTable().ajax.reload(null, false);
-						showSnackbar('del');
-					});
-				},
-				error: function () {
-					alert('خطا در ارتباط با سرور');
-				}
-			});
-		}
+		deleteUsers([user_id], 'آیا از حذف کاربر اطمینان دارید؟');
 	});
 
-	// حذف چندتایی (checkbox)
+	// حذف گروهی
 	$("#delete_selected").on("click", function (e) {
 		var user_ids = [];
 		$("input:checkbox[name='row-check']:checked").each(function() {
@@ -208,61 +214,11 @@
 			return;
 		}
 
-		if (confirm('آیا از حذف کاربران انتخاب شده اطمینان دارید؟')) {
-			$.ajax({
-				type: "POST",
-				url: "<?php echo base_url(); ?>admin/soft_delete_user",
-				data: {user_ids: user_ids},
-				success: function (response) {
-					var res = JSON.parse(response);
-					handleAjaxResponse(res, function() {
-						$('#usr_data').DataTable().ajax.reload(null, false);
-						showSnackbar('del');
-					});
-				},
-				error: function () {
-					alert('خطا در ارتباط با سرور');
-				}
-			});
-		}
+		deleteUsers(user_ids, 'آیا از حذف کاربران انتخاب شده اطمینان دارید؟');
 	});
 
-	// فعالسازی/غیرفعالسازی تکی
-	$(document).on('click', '#active, #deactive', function(e){
-		var user_id = $(this).attr('user_id');
-		var status = $(this).attr('id') === 'active' ? 1 : 0;
-
-		$.ajax({
-			url: "<?= base_url('admin/toggle_user_status') ?>",
-			method: "POST",
-			data: { user_id: user_id, status: status },
-			success: function (response) {
-				var res = JSON.parse(response);
-				handleAjaxResponse(res, function() {
-					$('#usr_data').DataTable().ajax.reload(null, false);
-					showSnackbar('upd');
-				});
-			},
-			error: function () {
-				alert('خطا در ارتباط با سرور');
-			}
-		});
-	});
-
-	// فعالسازی/غیرفعالسازی گروهی
-	$(document).on('click', '#active_selected, #deactive_selected', function(){
-		var user_ids = [];
-		$("input[name='row-check']:checked").each(function() {
-			user_ids.push($(this).attr('user_id'));
-		});
-
-		if (user_ids.length === 0) {
-			alert('حداقل یک رکورد انتخاب کنید.');
-			return;
-		}
-
-		var status = $(this).attr('id') === 'active_selected' ? 1 : 0;
-
+	//فعال/غیرفعال کردن کاربر
+	function toggleUserStatus(user_ids, status) {
 		$.ajax({
 			url: "<?= base_url('admin/toggle_user_status') ?>",
 			method: "POST",
@@ -278,8 +234,31 @@
 				alert('خطا در ارتباط با سرور');
 			}
 		});
+	}
+
+	//toggle تکی
+	$(document).on('click', '#active, #deactive', function(e){
+		var user_id = $(this).attr('user_id');
+		var status = $(this).attr('id') === 'active' ? 1 : 0;
+
+		toggleUserStatus([user_id], status);
 	});
 
+	//toggle گروهی
+	$(document).on('click', '#active_selected, #deactive_selected', function(){
+		var user_ids = [];
+		$("input[name='row-check']:checked").each(function() {
+			user_ids.push($(this).attr('user_id'));
+		});
+
+		if (user_ids.length === 0) {
+			alert('حداقل یک رکورد انتخاب کنید.');
+			return;
+		}
+
+		var status = $(this).attr('id') === 'active_selected' ? 1 : 0;
+		toggleUserStatus(user_ids, status);
+	});
 
 	//If check_all checked then check all table rows
 	$("#check_all").on("click", function () {
