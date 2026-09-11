@@ -1,5 +1,9 @@
+
+
 <?php if($this->session->userdata('id')){ ?>
+	<div id="snackbar_del" class="snackbar">حذف با موفقیت انجام شد</div>
 	<div id="snackbar_ins" class="snackbar">درج با موفقیت انجام شد</div>
+	<div id="snackbar_upd" class="snackbar">ویرایش با موفقیت انجام شد</div>
 
 	<div class="container-fluid" id="content" >
 		<div class="row" style="margin-top: 50px; margin-bottom: 60px">
@@ -30,7 +34,7 @@
 						<div class="form-group">
 							<label for="name" class="">نام:</label>
 							<span style="color: red" id="name_err"></span>
-							<input maxlength="25" autocomplete="off" id="name" name="name" type="text" class="form-control" value="<?php echo set_value('name'); ?>" placeholder="نام">
+							<input maxlength="25" autocomplete="off" id="name" name="name" type="text" class="form-control" value="<?php if (form_error('name')) {echo set_value('name');}?>" placeholder="نام">
 							<?php echo form_error('name','<span style="color: red">','</span>') ?>
 
 						</div>
@@ -38,20 +42,21 @@
 						<div class="form-group">
 							<label for="family" class="">نام خانوادگی:</label>
 							<span style="color: red" id="family_err"></span>
-							<input maxlength="25" autocomplete="off" id="family" name="family" type="text" class="form-control" value="<?php echo set_value('family'); ?>" placeholder="نام خانوادگی">
+							<input maxlength="25" autocomplete="off" id="family" name="family" type="text" class="form-control" value="<?php if (form_error('family')) {echo set_value('family');}?>" placeholder="نام خانوادگی">
 							<?php echo form_error('family','<span style="color: red">','</span>') ?>
 						</div>
 
 						<div class="form-group">
 							<label for="phone_number" class="required">شماره موبایل:</label>
 							<span style="color: red" id="ph_err"></span>
-							<input maxlength="11" autocomplete="off" id="phone_number" name="phone_number" type="text" class="form-control positive" value="<?php echo set_value('phone_number'); ?>" placeholder="شماره موبایل">
+							<input maxlength="11" autocomplete="off" id="phone_number" name="phone_number" type="text" class="form-control positive" value="<?php if (form_error('phone_number')) {echo set_value('phone_number');}?>" placeholder="شماره موبایل">
 							<?php echo form_error('phone_number','<span style="color: red">','</span>') ?>
 						</div>
 						<div class="form-group">
 							<label for="password" class="required">رمز عبور :</label>
 							<span style="color: red" id="pass_err"></span>
 							<input autocomplete="new-password" id="password" name="password" type="password" class="form-control positive"  placeholder="رمز عبور">
+							<!--									   value="--><?php //if (form_error('password')) {echo set_value('password');}?><!--" -->
 
 							<?php echo form_error('password','<span style="color: red">','</span>') ?>
 						</div>
@@ -60,7 +65,7 @@
 							<label for="phone_number1" class="">شماره موبایل ضروری:</label>
 							<span style="color: red" id="ph1_err"></span>
 							<input maxlength="11" autocomplete="off" id="phone_number1" name="phone_number1" type="text"
-								   class="form-control positive" value="<?php echo set_value('phone_number1'); ?>" placeholder="شماره موبایل ضروری">
+								   class="form-control positive" value="<?php if (form_error('phone_number1')) {echo set_value('phone_number1');}?>" placeholder="شماره موبایل ضروری">
 							<?php echo form_error('phone_number1','<span style="color: red">','</span>') ?>
 						</div>
 
@@ -68,10 +73,10 @@
 							<label for="ostan" class="">استان:</label>
 							<select class="form-control" id="ostan" name="ostan">
 
-								<option value=""<?php echo set_select('ostan', '', true); ?>><?php echo "انتخاب کنید.."; ?></option>
+								<option selected value=""><?php echo "انتخاب کنید.."; ?></option>
 
 								<?php foreach ($province as $pro){ ?>
-									<option value="<?php echo $pro->id?>" <?php echo set_select('ostan', $pro->id); ?>><?php echo $pro->name?></option>
+									<option value="<?php echo $pro->id?>"><?php echo $pro->name?></option>
 								<?php }?>
 							</select>
 							<?php echo form_error('ostan','<span style="color: red">','</span>') ?>
@@ -80,13 +85,13 @@
 						<div class="form-group">
 							<label for="city" class="">شهر:</label>
 							<select class="form-control" id="city" name="city">
-								<option value=""<?php echo set_select('city', '', true); ?>>انتخاب کنید</option>
+								<option value="">انتخاب کنید</option>
 
 								<?php  foreach ($province as $pro){
 									foreach ($city as $ci){
 										if($ci->province_id==$pro->id){?>
 
-											<option value="<?php echo $ci->id?>" <?php echo set_select('city', $ci->id); ?>><?php echo $ci->name; ?></option>
+											<option value="<?php echo $ci->id?>"><?php echo $ci->name; ?></option>
 										<?php }}}?>
 							</select>
 							<?php echo form_error('city','<span style="color: red">','</span>') ?>
@@ -95,14 +100,14 @@
 						<div class="form-group">
 							<label for="address" class="">آدرس:</label>
 							<span style="color: red" id="add_err"></span>
-							<input autocomplete="off" id="address" name="address" type="text" class="form-control" value="<?php echo set_value('address'); ?>" placeholder="آدرس">
+							<input autocomplete="off" id="address" name="address" type="text" class="form-control" value="<?php if (form_error('address')) {echo set_value('address');}?>" placeholder="آدرس">
 							<?php echo form_error('address','<span style="color: red">','</span>') ?>
 						</div>
 
 						<div class="form-group">
 							<label for="postal_code" class="">کدپستی:</label>
 							<span style="color: red" id="pcode_err"></span>
-							<input autocomplete="off" id="postal_code" name="postal_code" type="text" class="form-control" value="<?php echo set_value('postal_code'); ?>" placeholder="کدپستی">
+							<input autocomplete="off" id="postal_code" name="postal_code" type="text" class="form-control" value="<?php if (form_error('postal_code')) {echo set_value('postal_code');}?>" placeholder="کدپستی">
 							<?php echo form_error('postal_code','<span style="color: red">','</span>') ?><br>
 						</div>
 
@@ -122,6 +127,7 @@
 
 <script>
 
+
 	$(document).ready(function () {
 		<?php if ($this->session->flashdata('success')) { ?>
 		showSnackbar('ins');
@@ -132,19 +138,21 @@
 		<?php } ?>
 	});
 
-	// ✅ بررسی شماره موبایل اصلی (phone_number)
+
 	$('#phone_number').on('input', function() {
 		var pn = $(this).val();
 		var errorEl = $('#ph_err');
-		var regex = /^(0)?9\d{9}$/;
+		var regex = /^(0)?9\d{9}$/; // قبول با صفر یا بدون صفر
 
+		// پاک کردن پیام قبلی
 		errorEl.html('').css('color','');
 
+		// فقط وقتی طول به حد نصاب رسید بررسی کن
 		if (pn.length === 10 || pn.length === 11) {
 			if (regex.test(pn)) {
 				// شماره درست، حالا بررسی شماره تکراری با AJAX
 				$.ajax({
-					url: "<?= base_url('admin/check_phone') ?>",
+					url: "<?= base_url('admin/check_phone') ?>", // تابع سرور برای چک کردن
 					method: "POST",
 					data: { phone_number: pn },
 					success: function(data) {
@@ -163,71 +171,144 @@
 		}
 	});
 
-	// ✅ بررسی شماره موبایل ضروری (phone_number1)
-	$('#phone_number1').on('input', function(){
-		var pn = $(this).val();
-		var regex = /^(0)?9\d{9}$/;
-		var error = $('#ph1_err');
 
-		error.html('').css('color', '');
-
-		if (pn.length === 0) {
-			return; // اختیاری است
-		}
-
-		if (pn.length === 10 || pn.length === 11) {
-			if (regex.test(pn)) {
-				error.html('شماره ضروری معتبر است').css('color', 'green');
-			} else {
-				error.html('شماره وارد شده نادرست است').css('color', 'red');
-			}
-		} else if (pn.length > 11) {
-			error.html('تعداد ارقام بیشتر از حد مجاز است').css('color', 'red');
-		}
-	});
-
-	// ✅ دریافت شهرها هنگام تغییر استان
+	//---------get_city-----------
 	$('#ostan').change(function(){
-		var province_id = $("#ostan").val();
-		if(!province_id) {
-			$('#city').html('<option value="">انتخاب کنید</option>');
-			return;
-		}
-		$.post('<?php echo base_url();?>admin/get_city',{'province_id':province_id},
+		province_id=$("#ostan").val();
+		$.post('<?php echo base_url();?>home/get_city',{'province_id':province_id},
 			function(data){
 				$('#city').html(data);
+				//console.log(province_id);
 			});
 	});
+	$('#city').change(function(){
+		city=$("#city").val();
+		//console.log(city);
 
-	// ✅ فیلتر فارسی برای نام و نام خانوادگی
-	$('#name, #family').on("input", function() {
-		this.value = this.value
-			.replace(/[^\u0600-\u06FF0-9 ]/g,'')
-			.replace(/\s\s+/g, ' ')
-			.replace(/^\s+/g, '')
-			.replace(/^[\d .-]+/g,'');
 	});
 
-	// ✅ هشدار در صورت ورود اعداد یا حروف انگلیسی
-	$('#name, #family').on("keypress", function(event) {
-		var errorEl = $(this).attr('id') === 'name' ? $('#name_err') : $('#family_err');
+	$('#name, #family').on("input",function() {
 
-		if ((event.keyCode >= 48 && event.keyCode <= 57) ||
-			(event.keyCode >= 65 && event.keyCode <= 90) ||
-			(event.keyCode >= 97 && event.keyCode <= 122)) {
-			errorEl.show();
-			if (event.keyCode >= 48 && event.keyCode <= 57) {
-				errorEl.html('فقط از حروف فارسی استفاده کنید');
-			} else {
-				errorEl.html('زبان کیبورد را فارسی کنید');
+		/*
+				this.value = this.value.replace(/[^a-zA-Z0-9 ]/g,'').replace(/\s\s+/g, ' ').replace(/^\s+/g, '');
+		*/
+
+		// /[آ-ی]|([a-zA-Z])/
+
+		//چک کردن حروف فارسی. جلوگیری از اسپیس اول. جلوگیری از اسپیس های چنتایی
+		this.value = this.value.replace(/[^\u0600-\u06FF0-9 ]/g,'').replace(/\s\s+/g, ' ').replace(/^\s+/g, '').replace(/^[\d .-]+/g,'');
+
+
+	});
+
+
+	$('#name, #family').on("keypress",function(event) {
+
+		if (event.keyCode >= 48 && event.keyCode <= 57) {
+			// Number
+			if(this.id==='name'){
+				$('#name_err').show();
+				$('#name_err').html('فقط از حروف فارسی استفاده کنید');
 			}
-		} else {
-			errorEl.hide();
+			else if(this.id==='family'){
+				$('#family_err').show();
+				$('#family_err').html('فقط از حروف فارسی استفاده کنید');
+			}
+		} else if (event.keyCode >= 65 && event.keyCode <= 90) {
+			// Alphabet upper case
+			if(this.id==='name'){
+				$('#name_err').show();
+				$('#name_err').html('زبان کیبورد را فارسی کنید');
+			}
+			else if(this.id==='family'){
+				$('#family_err').show();
+				$('#family_err').html('زبان کیبورد را فارسی کنید');
+			}
+		} else if (event.keyCode >= 97 && event.keyCode <= 122) {
+			// Alphabet lower case
+			if (this.id === 'name') {
+				$('#name_err').show();
+				$('#name_err').html('زبان کیبورد را فارسی کنید');
+			} else if (this.id === 'family') {
+				$('#family_err').show();
+				$('#family_err').html('زبان کیبورد را فارسی کنید');
+
+			}
+		}else {
+
+			if (this.id === 'name') {
+				$('#name_err').hide();
+			} else if (this.id === 'family') {
+				$('#family_err').hide();
+			}
 		}
+
+
 	});
 
-	// ✅ فیلتر اعداد برای فیلدهای شماره
-	$('.positive').keydown(function(e) {
+	$('#phone_number').keyup(function(){
+		var pn=$(this).val();
+		var regx = "^(\\+98|0)?9\\d{9}$";
+		var err='';
+		var error = $('#ph_err');
+
+		if(pn!==''){
+			if(pn.match(regx)){
+				err= '';
+				error.html(err);
+			}
+			else
+			{
+				if (pn.length == 11){
+					err= 'شماره وارد شده نادرست است';
+					error.html(err);
+					error.css({'color':'red'});
+				}else{
+					err= 'تعداد ارقام کمتر از 11 می باشد';
+					error.html(err);
+					error.css({'color':'blue'});
+				}
+
+			}
+		}else{
+			error.html(err);
+			error.css({'color':''});
+		}
+
+	});
+
+	$('#phone_number1').keyup(function(){
+		var pn=$(this).val();
+		var regx = "^(\\+98|0)?9\\d{9}$";
+		var err='';
+		var error = $('#ph1_err');
+
+		if(pn!==''){
+			if(pn.match(regx)){
+				err= '';
+				error.html(err);
+			}
+			else
+			{
+				if (pn.length == 11){
+					err= 'شماره وارد شده نادرست است';
+					error.html(err);
+					error.css({'color':'red'});
+				}else{
+					err= 'تعداد ارقام کمتر از 11 می باشد';
+					error.html(err);
+					error.css({'color':'blue'});
+				}
+
+			}
+		}else{
+			error.html(err);
+			error.css({'color':''});
+		}
+
+	});
+
+	$('.positive').keydown( function(e) {
 		if(!((e.keyCode > 95 && e.keyCode < 106)
 			|| (e.keyCode > 47 && e.keyCode < 58)
 			|| e.keyCode == 8)) {

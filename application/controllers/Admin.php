@@ -8,6 +8,8 @@ class Admin extends CI_Controller
 		parent::__construct();
 		$this->load->model('base_model');
 		$this->load->library('jalali_date'); // اجباری برای اطمینان از لود صحیح
+		$this->load->library('form_validation');
+		$this->load->helper('form');
 	}
 	protected function check_permission($permissions, $table = null)
 	{
@@ -42,6 +44,33 @@ class Admin extends CI_Controller
 
 		return array_unique($protected_users);
 	}
+	/**
+	 *  یکسان‌سازی فرمت شماره موبایل به حالت استاندارد: 09xxxxxxxxx
+	 * ورودی می‌تونه +989xx، 989xx، 09xx یا 9xx باشه
+	 * خروجی همیشه: 09xxxxxxxxx (11 رقم)
+	 */
+	private function _normalize_phone($phone)
+	{
+		if (empty($phone)) {
+			return $phone;
+		}
+
+		// حذف همه کاراکترها به جز عدد
+		$phone = preg_replace('/[^\d]/', '', $phone);
+
+		// حذف پیشوند 98 (از +98 یا 0098 اومده باشه)
+		if (substr($phone, 0, 2) === '98' && strlen($phone) === 12) {
+			$phone = substr($phone, 2);
+		}
+
+		// اگه با 9 شروع می‌شه و 10 رقمیه (بدون صفر)، صفر جلوش اضافه کن
+		if (substr($phone, 0, 1) === '9' && strlen($phone) === 10) {
+			$phone = '0' . $phone;
+		}
+
+		return $phone; // نتیجه نهایی همیشه: 09xxxxxxxxx
+	}
+
 	//<<--------------- date_shamsi_ghamari ---------------->>
 	public function date_j($miladi_date)
 	{
@@ -53,7 +82,7 @@ class Admin extends CI_Controller
 	}
 	//<<--------------- end date_shamsi_ghamari ---------------->>
 
-	// 📊 صفحه‌ی اصلی ادمین (داشبورد)
+	// صفحه‌ی اصلی ادمین (داشبورد)
 	public function index()
 	{
 		// بررسی لاگین بودن
@@ -76,7 +105,7 @@ class Admin extends CI_Controller
 		$this->load->view('admin/admin-panel', $data);
 	}
 
-	// 🪪 صفحه‌ی ورود
+	// صفحه‌ی ورود
 	public function login_page()
 	{
 		if ($this->session->userdata('id')) {
@@ -86,10 +115,10 @@ class Admin extends CI_Controller
 
 		$data['title'] = 'ورود';
 		$this->load->view('admin/layout/header2', $data);
-		$this->load->view('admin/login');
+		$this->load->view('admin/login_page');
 	}
 
-	// 🔐 لاگین
+	// لاگین
 	public function login()
 	{
 		if (!$this->input->post()) {
@@ -201,7 +230,7 @@ class Admin extends CI_Controller
 		return redirect('admin');
 	}
 
-	// 🚪 خروج از حساب
+	// خروج از حساب
 	public function logout()
 	{
 		// دریافت ID از سشن
@@ -514,8 +543,7 @@ class Admin extends CI_Controller
 	public function toggle_user_status()
 	{
 		// 1️⃣ چک دسترسی
-		$logged_user_id = $this->check_permission(['edit', 'full'], 'users', true);
-
+		$logged_user_id = $this->check_permission(['edit', 'full'], 'users');
 		// 2️⃣ دریافت ورودی
 		$post_data = $this->input->post(NULL, TRUE);
 
@@ -619,6 +647,7 @@ class Admin extends CI_Controller
 
 				$user_before = (array) $user_before[0]; // برای ذخیره در old_value
 				$old_value = $user_before;
+				unset($old_value['password']); // ✅ حذف هش پسورد قدیمی از لاگ
 
 				// هش کردن رمز جدید
 				$hashed_pass = password_hash($new_pass, PASSWORD_BCRYPT);
@@ -629,6 +658,7 @@ class Admin extends CI_Controller
 				// گرفتن اطلاعات جدید بعد از آپدیت
 				$user_after = $this->base_model->get_data('users', '*', ['id' => $id]);
 				$user_after = isset($user_after[0]) ? (array) $user_after[0] : [];
+				unset($user_after['password']); // ✅ حذف هش پسورد جدید از لاگ
 
 				// آماده‌سازی داده‌های لاگ
 				$group_id = uniqid('grp_', true);
@@ -655,222 +685,364 @@ class Admin extends CI_Controller
 		}
 	}
 
-	public function _phoneRegex($phn_num){
-		// اگر فیلد خالی بود، اجازه بده rule "required" پیام خودش را نمایش دهد
-		if (empty($phone)) {
-			return TRUE;
-		}
-		if (preg_match('/^(\+98|0)?9\d{9}$/', $phn_num)){
-			return true;
-		}else{
-			return false;
-		}
-	}
-	public function _phoneRegex2($phn_num2)
-    {
-        if (empty($phn_num2)) {
-            // خالی بودن مجازه
-            return TRUE;
-        }
-        if (preg_match('/^(\+98|0)?9\d{9}$/', $phn_num2)){
-            return TRUE;
-        }
-        $this->form_validation->set_message('postal_check', 'شماره موبایل نادرست است');
-        return FALSE;
-    }
-	public function _postal_check($str)
+
+
+	/**
+	 *  بررسی صحت شماره موبایل اصلی (الزامی)
+	 */
+	public function _phoneRegex($phone_number)
 	{
-		if (empty($str)) {
-			// خالی بودن مجازه
+		if (empty($phone_number)) {
+			return FALSE; // الزامی است، بنابراین اگر خالی باشد false برگردون
+		}
+
+		if (preg_match('/^(\+98|0)?9\d{9}$/', $phone_number)) {
 			return TRUE;
 		}
-		if (preg_match('/^\d{10}$/', $str)) {
-			return TRUE;
-		}
-		$this->form_validation->set_message('postal_check', 'کد پستی باید 10 رقم باشد.');
+
+		$this->form_validation->set_message('_phoneRegex', 'فرمت شماره موبایل نادرست است');
 		return FALSE;
 	}
-	public function get_city(){
-		$province_id=$this->input->post('province_id');
-		$city=$this->base_model->get_data('city','*',array('province_id'=>$province_id));
-		$result='<option value="">انتخاب کنید</option>';
-		foreach($city as $row){
-			$result=$result."<option value='$row->id'>$row->name</option>";
+
+	/**
+	 *  بررسی صحت شماره موبایل ضروری (اختیاری)
+	 */
+	public function _phoneRegex2($phone_number)
+	{
+		if (empty($phone_number)) {
+			return TRUE; // اختیاری است، خالی بودن مجازه
 		}
+
+		if (preg_match('/^(\+98|0)?9\d{9}$/', $phone_number)) {
+			return TRUE;
+		}
+
+		$this->form_validation->set_message('_phoneRegex2', 'فرمت شماره موبایل نادرست است');
+		return FALSE;
+	}
+
+	/**
+	 *  بررسی صحت کد پستی (10 رقم)
+	 */
+	public function _postal_check($postal_code)
+	{
+		if (empty($postal_code)) {
+			return TRUE; // اختیاری است
+		}
+
+		if (preg_match('/^\d{10}$/', $postal_code)) {
+			return TRUE;
+		}
+
+		$this->form_validation->set_message('_postal_check', 'کد پستی باید 10 رقم باشد');
+		return FALSE;
+	}
+
+	/**
+	 *  دریافت شهرها برای استان انتخاب شده (AJAX)
+	 */
+	public function get_city()
+	{
+		if (!$this->input->post('province_id')) {
+			echo '<option value="">انتخاب کنید</option>';
+			return;
+		}
+
+		$province_id = $this->input->post('province_id', TRUE);
+
+		//  از base_model استفاده کنید
+		$cities = $this->base_model->get_data(
+			'city',
+			'id, name',
+			['province_id' => $province_id]
+		);
+
+		$result = '<option value="">انتخاب کنید</option>';
+
+		foreach ($cities as $city) {
+			$result .= sprintf(
+				'<option value="%d">%s</option>',
+				$city->id,
+				htmlspecialchars($city->name, ENT_QUOTES, 'UTF-8')
+			);
+		}
+
 		echo $result;
 	}
-	function search_ostan()
+
+	/**
+	 *  بررسی تکراری بودن شماره موبایل (AJAX)
+	 */
+	public function check_phone()
 	{
-		$output = '';
-		$query = '';
-		if($this->input->post('query'))
-		{
-			$query = $this->input->post('query');
-		}
-
-		$data = $this->base_model->search_ostan($query);
-
-
-		if($data->num_rows() > 0)
-		{
-			foreach($data->result() as $row)
-			{
-				$output .= ' <a
-				class="prov_tag" id="prov_tag_'.$row->id.'" id_prov="'.$row->id.'" style="display: block;">'.$row->name.'</a> ';
-
-			}
-		} else {
-			$output = 0;
-		}
-		echo $output;
-	}
-    public function check_phone()
-    {
-        if ($this->input->post('phone_number')) {
-            $phone = $this->input->post('phone_number', true);
-
-            // بررسی وجود شماره موبایل در جدول users
-			$existing = $this->base_model->get_data(
-				'users',
-				'*',
-				['phone_number' => $phone],
-				null, null, null, null, null, null, null, null,
-				'object',
-				false // include_deleted = true
-			);
-
-            if (!empty($existing)) {
-                echo 'exists';
-            } else {
-                echo 'ok';
-            }
-        } else {
+		if (!$this->input->post('phone_number')) {
 			echo 'exists';
-        }
-    }
+			return;
+		}
 
+		//  نرمال‌سازی قبل از بررسی
+		$phone = $this->_normalize_phone($this->input->post('phone_number', TRUE));
 
-    public function insert_user()
-	{
-		$data['profile']=$this->base_model->get_data('profile','*');
-		$data['users']=$this->base_model->get_data('users','*');
-		$data['roles']=$this->base_model->get_data('roles','*');
-		$data['province']=$this->base_model->get_data('province','*');
-		$data['city']=$this->base_model->get_data('city','*');
+		//  صحت شماره را قبل از دیتابیس چک کنید
+		if (!preg_match('/^(\+98|0)?9\d{9}$/', $phone)) {
+			echo 'invalid';
+			return;
+		}
 
-		$data['title']='افزودن کاربر';
-		$this->load->view('admin/layout/header',$data);
-		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/insert_user');
+		//  استفاده صحیح از get_data
+		$existing = $this->base_model->get_data(
+			'users',
+			'id',
+			['phone_number' => $phone]
+		);
+
+		if (!empty($existing)) {
+			echo 'exists';
+		} else {
+			echo 'ok';
+		}
 	}
 
+	/**
+	 *  Callback برای بررسی تکراری نبودن شماره موبایل در فرم validation
+	 */
+	public function _check_phone_unique($phone)
+	{
+		if (empty($phone)) {
+			return TRUE; // required خودش خالی بودن رو چک می‌کنه
+		}
+
+		//  نرمال‌سازی قبل از بررسی تکراری بودن
+		$phone = $this->_normalize_phone($phone);
+
+		$existing = $this->base_model->get_data(
+			'users',
+			'id',
+			['phone_number' => $phone]
+		);
+
+		if (!empty($existing)) {
+			$this->form_validation->set_message('_check_phone_unique', 'کاربری با این شماره موبایل قبلاً ثبت شده است');
+			return FALSE;
+		}
+
+		return TRUE;
+	}
+
+	/**
+	 *  نمایش فرم درج کاربر
+	 */
+	public function insert_user()
+	{
+		//  بررسی دسترسی
+		$user_id = $this->session->userdata('id');
+		if (!$user_id) {
+			redirect('login');
+			return;
+		}
+
+		$data = [
+			'title' => 'افزودن کاربر جدید',
+			'roles' => $this->base_model->get_data('roles', '*', ['isActive' => 1]),
+			'province' => $this->base_model->get_data('province', '*')
+		];
+
+		$this->load->view('admin/layout/header', $data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/insert_user', $data);
+	}
+
+	/**
+	 *  ثبت کاربر جدید
+	 */
 	public function add_user()
 	{
-		// 1️⃣ چک دسترسی – حتماً در ابتدای متد
-		$is_user = $this->session->userdata('id');
+		// 1️⃣ بررسی دسترسی
+		$user_id = $this->session->userdata('id');
+		if (!$user_id) {
+			$this->session->set_flashdata('error', 'لطفاً وارد سیستم شوید');
+			redirect('login');
+			return;
+		}
 
-		if (!$this->base_model->has_permission(
-			$is_user,
-			['insert', 'full'],
-			'users'
-		)) {
-			$this->session->set_flashdata('err', 'شما دسترسی ایجاد کاربر را ندارید.');
+		if (!$this->base_model->has_permission($user_id, ['insert', 'full'], 'users')) {
+			$this->session->set_flashdata('error', 'شما دسترسی افزودن کاربر را ندارید');
 			redirect('admin/registered_users');
 			return;
 		}
 
-		// 2️⃣ اگر فرم ارسال نشده، برگرد به فرم
+		// 2️⃣ اگر فرم ارسال نشده، به فرم برگردید
 		if (!$this->input->post()) {
 			return $this->insert_user();
 		}
 
-		$this->load->library('form_validation');
-		$this->load->helper('form');
+		// 3️⃣ تنظیم قوانین validation
+		$this->_set_validation_rules();
 
-		// پیام‌ها و قوانین ولیدیشن
-		$this->form_validation->set_message('required', 'فیلد الزامی است');
-		$this->form_validation->set_message('min_length', '%s باید حداقل %d کاراکتر داشته باشد');
-		$this->form_validation->set_message('max_length', '%s باید حداکثر %d کاراکتر داشته باشد');
-		$this->form_validation->set_message('_phoneRegex', 'شماره وارد شده نادرست است');
-		$this->form_validation->set_message('check_phone', 'شماره وارد شده تکراری است');
-		$this->form_validation->set_message('_phoneRegex2', 'شماره وارد شده نادرست است');
-		$this->form_validation->set_message('_postal_check', 'در صورت ورود کدپستی، باید 10 رقم باشد');
-
-		$this->form_validation->set_rules('role', 'نوع کاربر', 'required');
-		$this->form_validation->set_rules('password', 'رمز عبور', 'required|min_length[8]|max_length[25]');
-		$this->form_validation->set_rules('phone_number', 'شماره موبایل', 'required|min_length[10]|max_length[11]|callback__phoneRegex|callback_check_phone');
-		$this->form_validation->set_rules('phone_number1', 'شماره موبایل ضروری', 'callback__phoneRegex2');
-		$this->form_validation->set_rules('postal_code', 'کد پستی', 'callback__postal_check');
-
+		// 4️⃣ اجرای validation (شامل بررسی تکراری بودن شماره موبایل)
 		if (!$this->form_validation->run()) {
 			return $this->insert_user();
 		}
 
-		$phone_number = $this->input->post('phone_number', true);
-		$group_id = uniqid('grp_', true);
-		$operationInfo = "افزودن کاربر جدید";
-		$now = date('Y-m-d H:i:s');
+//  نرمال‌سازی شماره‌ها قبل از استفاده
+		$phone_number = $this->_normalize_phone($this->input->post('phone_number', TRUE));
+		$phone_number1 = $this->_normalize_phone($this->input->post('phone_number1', TRUE));
+		
+		// 6️⃣ شروع تراکنش
+		$this->db->trans_start();
 
-		// بررسی وجود کاربر قبلی
-		$existing_user = $this->base_model->get_data('users', '*', ['phone_number' => $phone_number]);
-		if (!empty($existing_user)) {
-			$this->base_model->add_log(
+		try {
+			//  محافظت در برابر Race Condition:
+			// با SELECT ... FOR UPDATE ردیف‌های فعال با این شماره رو قفل می‌کنیم
+			// تا درخواست‌های همزمان دیگه نتونن همزمان همین بررسی رو بگذرونن
+			$lock_check = $this->db
+				->select('id')
+				->from('users')
+				->where('phone_number', $phone_number)
+				->where('deleted_at', NULL)
+				->get()
+				->result();
+
+			if (!empty($lock_check)) {
+				$this->db->trans_rollback();
+				$this->session->set_flashdata('error', 'کاربری با این شماره موبایل قبلاً ثبت شده است');
+				redirect('admin/insert_user');
+				return;
+			}
+
+			$now = date('Y-m-d H:i:s');
+			$group_id = uniqid('grp_', true);
+			$operation_info = 'افزودن کاربر جدید: ' . $phone_number;
+
+			//  داده‌های جدول users
+			$user_data = [
+				'phone_number' => $phone_number,
+				'password' => password_hash($this->input->post('password', TRUE), PASSWORD_DEFAULT),
+				'isActive' => 0,
+				'created' => $now,
+				'modified' => $now
+			];
+			$new_user_id = $this->base_model->insert_data('users', $user_data);
+
+			if (!$new_user_id) {
+				throw new Exception('خرابی در افزودن کاربر');
+			}
+
+			//  دوباره‌بررسی نهایی بعد از insert: اگه بیشتر از یک کاربر فعال
+			// با این شماره پیدا شد (یعنی یه درخواست موازی هم درج کرده)، rollback کن
+			$duplicate_check = $this->base_model->get_data(
 				'users',
-				$existing_user[0]->id,
-				'add_user_failed',
-				null,
-				null,
-				'تلاش ناموفق برای افزودن کاربر با شماره موبایل: ' . $phone_number,
-				$group_id,
-				$operationInfo
+				'id',
+				['phone_number' => $phone_number]
 			);
 
-			$this->session->set_flashdata('err', 'کاربری با این شماره موبایل وجود دارد.');
+			if (count($duplicate_check) > 1) {
+				throw new Exception('این شماره موبایل همزمان توسط درخواست دیگری ثبت شد');
+			}
+
+			//  داده‌های جدول profile
+			$profile_data = [
+				'user_id' => $new_user_id,
+				'name' => $this->input->post('name', TRUE) ?: '',
+				'family' => $this->input->post('family', TRUE) ?: '',
+				'reciever_phone_number' => $this->input->post('phone_number1', TRUE) ?: NULL,
+				'ostan' => $this->input->post('ostan', TRUE) ?: NULL,
+				'city' => $this->input->post('city', TRUE) ?: NULL,
+				'address' => $this->input->post('address', TRUE) ?: '',
+				'postal_code' => $this->input->post('postal_code', TRUE) ?: NULL,
+				'created' => $now,
+				'modified' => $now
+			];
+			$this->base_model->insert_data('profile', $profile_data);
+
+			//  داده‌های جدول user_roles
+			$role_id = $this->input->post('role', TRUE);
+			$role_data = [
+				'user_id' => $new_user_id,
+				'role_id' => $role_id,
+				'isActive' => 1,
+				'created' => $now,
+				'modified' => $now
+			];
+			$this->base_model->insert_data('user_roles', $role_data);
+
+			//  ثبت لاگ‌ها
+			$this->base_model->add_log(
+				'users',
+				$new_user_id,
+				'add_user_success',
+				NULL,
+				$user_data,
+				'کاربر جدید ایجاد شد',
+				$group_id,
+				$operation_info
+			);
+
+			$this->base_model->add_log(
+				'profile',
+				$new_user_id,
+				'add_user_success',
+				NULL,
+				$profile_data,
+				'پروفایل کاربر ایجاد شد',
+				$group_id,
+				$operation_info
+			);
+
+			//  اتمام تراکنش
+			$this->db->trans_complete();
+
+			if ($this->db->trans_status() === FALSE) {
+				throw new Exception('خرابی در ذخیره‌سازی');
+			}
+
+			$this->session->set_flashdata('success', 'کاربر با موفقیت افزوده شد');
 			redirect('admin/insert_user');
-			return;
+
+		} catch (Exception $e) {
+			$this->db->trans_rollback();
+			log_message('error', 'Add User Error: ' . $e->getMessage());
+			$this->session->set_flashdata('error', 'خرابی رخ داد: ' . $e->getMessage());
+			redirect('admin/insert_user');
 		}
-
-		// داده‌های جدول users
-		$data_users = [
-			'created' => $now,
-			'phone_number' => $phone_number,
-			'password' => password_hash($this->input->post('password', true), PASSWORD_DEFAULT),
-			'isActive' => 0 // کاربر تازه ایجاد شده غیر فعال است
-		];
-		$user_id = $this->base_model->insert_data('users', $data_users);
-
-		// داده‌های جدول profile
-		$data_profile = [
-			'user_id' => $user_id,
-			'created' => $now,
-			'name' => $this->input->post('name', true),
-			'family' => $this->input->post('family', true),
-			'reciever_phone_number' => $this->input->post('phone_number1', true),
-			'ostan' => $this->input->post('ostan', true),
-			'city' => $this->input->post('city', true),
-			'address' => $this->input->post('address', true),
-			'postal_code' => $this->input->post('postal_code', true)
-		];
-		$this->base_model->insert_data('profile', $data_profile);
-
-		// داده‌های جدول user_roles
-		$data_user_roles = [
-			'user_id' => $user_id,
-			'role_id' => $this->input->post('role', true),
-			'isActive' => 1,
-			'created' => $now,
-			'modified' => $now
-		];
-		$this->base_model->insert_data('user_roles', $data_user_roles);
-
-		// ثبت لاگ‌ها
-		$this->base_model->add_log('users', $user_id, 'add_user_success', null, (array)$data_users, 'افزودن کاربر جدید با شماره موبایل: ' . $phone_number, $group_id, $operationInfo);
-		$this->base_model->add_log('profile', $user_id, 'add_user_success', null, (array)$data_profile, 'افزودن کاربر جدید با شماره موبایل: ' . $phone_number, $group_id, $operationInfo);
-		$this->base_model->add_log('user_roles', $user_id, 'add_user_success', null, (array)$data_user_roles, 'افزودن نقش به کاربر با شماره موبایل: ' . $phone_number, $group_id, $operationInfo);
-
-		$this->session->set_flashdata('success', 'کاربر با موفقیت ایجاد شد.');
-		redirect('admin/insert_user');
 	}
+
+	/**
+	 *  تنظیم قوانین validation
+	 */
+	private function _set_validation_rules()
+	{
+		$this->form_validation->set_message('required', '{field} الزامی است');
+		$this->form_validation->set_message('min_length', '{field} باید حداقل {param} کاراکتر داشته باشد');
+		$this->form_validation->set_message('max_length', '{field} باید حداکثر {param} کاراکتر داشته باشد');
+		$this->form_validation->set_message('_phoneRegex', 'شماره موبایل نادرست است');
+		$this->form_validation->set_message('_phoneRegex2', 'شماره موبایل ضروری نادرست است');
+		$this->form_validation->set_message('_check_phone_unique', 'کاربری با این شماره موبایل قبلاً ثبت شده است');
+
+		$rules = [
+			['field' => 'role', 'label' => 'نوع کاربر', 'rules' => 'required|integer'],
+			['field' => 'password', 'label' => 'رمز عبور', 'rules' => 'required|min_length[8]|max_length[25]'],
+			['field' => 'phone_number', 'label' => 'شماره موبایل', 'rules' => 'required|callback__phoneRegex|callback__check_phone_unique'],
+			['field' => 'phone_number1', 'label' => 'شماره موبایل ضروری', 'rules' => 'callback__phoneRegex2'],  //  استفاده از _phoneRegex2
+			['field' => 'postal_code', 'label' => 'کد پستی', 'rules' => 'callback__postal_check'],
+			['field' => 'name', 'label' => 'نام', 'rules' => 'max_length[25]'],
+			['field' => 'family', 'label' => 'نام خانوادگی', 'rules' => 'max_length[25]'],
+			['field' => 'address', 'label' => 'آدرس', 'rules' => 'max_length[255]']
+		];
+
+		$this->form_validation->set_rules($rules);
+	}
+
+
+
+
+
+
+
+
+
+
+
 
 
 	public function edit_user($id)
