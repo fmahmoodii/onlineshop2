@@ -115,7 +115,7 @@ class Admin extends CI_Controller
 
 		$data['title'] = 'ورود';
 		$this->load->view('admin/layout/header2', $data);
-		$this->load->view('admin/login_page');
+		$this->load->view('admin/login');
 	}
 
 	// لاگین
@@ -685,8 +685,6 @@ class Admin extends CI_Controller
 		}
 	}
 
-
-
 	/**
 	 *  بررسی صحت شماره موبایل اصلی (الزامی)
 	 */
@@ -1034,19 +1032,35 @@ class Admin extends CI_Controller
 	}
 
 
-
-
-
-
-
-
-
-
-
-
-
+	/**
+	 * ✅ نمایش فرم ویرایش کاربر
+	 */
 	public function edit_user($id)
 	{
+		// 1️⃣ بررسی لاگین بودن
+		$logged_user_id = $this->session->userdata('id');
+		if (!$logged_user_id) {
+			redirect('admin/login_page');
+			return;
+		}
+
+		// 2️⃣ بررسی دسترسی مشاهده/ویرایش
+		if (!$this->base_model->has_permission($logged_user_id, ['edit', 'full'], 'users')) {
+			$data['title'] = 'دسترسی غیرمجاز';
+			$this->load->view('admin/layout/header', $data);
+			$this->load->view('admin/layout/sidebar');
+			$this->load->view('admin/errors/no_permission');
+			return;
+		}
+
+		// 3️⃣ بررسی وجود کاربر
+		$user_exists = $this->base_model->get_data('users', 'id', ['id' => $id]);
+		if (empty($user_exists)) {
+			$this->session->set_flashdata('error', 'کاربر مورد نظر یافت نشد');
+			redirect('admin/registered_users');
+			return;
+		}
+
 		$data['title']='ویرایش کاربر';
 		$data['profile']=$this->base_model->get_data('profile','*',array('user_id'=>$id));
 		$data['roles']=$this->base_model->get_data('roles','*');
@@ -1054,79 +1068,100 @@ class Admin extends CI_Controller
 		$data['province']=$this->base_model->get_data('province','*');
 		$data['city']=$this->base_model->get_data('city','*');
 		$data['users']=$this->base_model-> get_data('users','*',array('id'=>$id));
-		$data['user_data'] = $this->base_model->get_data(
-			'users u',
-			'u.id as user_id, r.id as role_id, r.role_name',
-			['u.id' => $id],
-			NULL,
-			NULL,
-			NULL,
-			NULL,
-			NULL,
-			NULL,
-			NULL,
-			[
-				'user_roles ur' => 'ur.user_id = u.id',
-				'roles r' => 'r.id = ur.role_id'
-			]
-		);
+
+		// ✅ پیدا کردن role_id کاربر بدون نیاز به join/alias
+		$current_user_role = $this->base_model->get_data('user_roles', 'role_id', ['user_id' => $id]);
+		$data['user_data'] = !empty($current_user_role)
+			? [ (object) ['user_id' => $id, 'role_id' => $current_user_role[0]->role_id] ]
+			: [];
 
 
 		$this->load->view('admin/layout/header',$data);
 		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/edit-user');
+		$this->load->view('admin/edit-user', $data);
 	}
 
+	/**
+	 * ✅ ثبت تغییرات ویرایش کاربر
+	 */
 	public function edit_u($id)
 	{
 		// 1️⃣ چک دسترسی – حتماً در ابتدای متد
-		$is_user = $this->session->userdata('id');
+		$logged_user_id = $this->session->userdata('id');
 
-		if (!$this->base_model->has_permission(
-			$is_user,
-			['edit', 'full'],
-			'users'
-		)) {
-			$this->session->set_flashdata('err', 'شما دسترسی ویرایش کاربر را ندارید.');
+		if (!$logged_user_id) {
+			$this->session->set_flashdata('error', 'لطفاً وارد سیستم شوید');
+			redirect('admin/login_page');
+			return;
+		}
+
+		if (!$this->base_model->has_permission($logged_user_id, ['edit', 'full'], 'users')) {
+			$this->session->set_flashdata('error', 'شما دسترسی ویرایش کاربر را ندارید');
 			redirect('admin/registered_users');
 			return;
 		}
 
+		// 2️⃣ بررسی وجود کاربر
+		$user_exists = $this->base_model->get_data('users', 'id', ['id' => $id]);
+		if (empty($user_exists)) {
+			$this->session->set_flashdata('error', 'کاربر مورد نظر یافت نشد');
+			redirect('admin/registered_users');
+			return;
+		}
 
-		if (!$this->input->post()) return;
+		// 3️⃣ جلوگیری از ویرایش کاربر محافظت‌شده توسط غیرمجاز
+		// (در صورتی که بخوای فقط خودشون بتونن پروفایل خودشون رو بزنن، این شرط رو تغییر بده)
+		$protected_users = $this->get_protected_user_ids();
+		if (in_array((int)$id, $protected_users) && $logged_user_id != $id) {
+			$this->session->set_flashdata('error', 'امکان ویرایش این کاربر وجود ندارد');
+			redirect('admin/registered_users');
+			return;
+		}
+
+		if (!$this->input->post()) {
+			return $this->edit_user($id);
+		}
 
 		$this->load->library('form_validation');
 		$this->load->helper('form');
 
-		// پیام‌ها
-		$this->form_validation->set_message('required', 'فیلد الزامی است');
-		$this->form_validation->set_message('min_length', '%s باید حداقل %d کاراکتر داشته باشد');
-		$this->form_validation->set_message('max_length', '%s باید حداکثر %d کاراکتر داشته باشد');
+		// 4️⃣ پیام‌ها
+		$this->form_validation->set_message('required', '{field} الزامی است');
+		$this->form_validation->set_message('min_length', '{field} باید حداقل {param} کاراکتر داشته باشد');
+		$this->form_validation->set_message('max_length', '{field} باید حداکثر {param} کاراکتر داشته باشد');
 		$this->form_validation->set_message('_phoneRegex2', 'شماره وارد شده نادرست است');
 		$this->form_validation->set_message('_postal_check', 'در صورت ورود کدپستی، باید 10 رقم باشد');
 
-		// قوانین
-		$this->form_validation->set_rules('role', 'نوع کاربر', 'required');
-		$this->form_validation->set_rules('phone_number1', 'شماره موبایل ضروری', 'callback__phoneRegex2');
-		$this->form_validation->set_rules('postal_code', 'کد پستی', 'callback__postal_check');
+		// 5️⃣ قوانین
+		$rules = [
+			['field' => 'role', 'label' => 'نوع کاربر', 'rules' => 'required|integer'],
+			['field' => 'phone_number1', 'label' => 'شماره موبایل ضروری', 'rules' => 'callback__phoneRegex2'],
+			['field' => 'postal_code', 'label' => 'کد پستی', 'rules' => 'callback__postal_check'],
+			['field' => 'name', 'label' => 'نام', 'rules' => 'max_length[25]'],
+			['field' => 'family', 'label' => 'نام خانوادگی', 'rules' => 'max_length[25]'],
+			['field' => 'address', 'label' => 'آدرس', 'rules' => 'max_length[255]']
+		];
+		$this->form_validation->set_rules($rules);
 
 		if (!$this->form_validation->run()) {
 			return $this->edit_user($id);
 		}
 
-		// زمان
-		date_default_timezone_set("Asia/Tehran");
-		$modified_time = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+		// ✅ زمان صحیح (فقط میلادی، مطابق ستون DATETIME)
+		$modified_time = date('Y-m-d H:i:s');
 
-		// داده‌های جدید
+		// ✅ نرمال‌سازی شماره موبایل ضروری
+		$phone_number1 = $this->_normalize_phone($this->input->post('phone_number1', TRUE));
+
+		// داده‌های جدید (با فیلتر XSS)
 		$new_profile = [
-			'name' => $this->input->post('name'),
-			'family' => $this->input->post('family'),
-			'reciever_phone_number' => $this->input->post('phone_number1'),
-			'ostan' => $this->input->post('ostan'),
-			'city' => $this->input->post('city'),
-			'address' => $this->input->post('address'),
-			'postal_code' => $this->input->post('postal_code'),
+			'name' => $this->input->post('name', TRUE),
+			'family' => $this->input->post('family', TRUE),
+			'reciever_phone_number' => $phone_number1 ?: NULL,
+			'ostan' => $this->input->post('ostan', TRUE) ?: NULL,
+			'city' => $this->input->post('city', TRUE) ?: NULL,
+			'address' => $this->input->post('address', TRUE),
+			'postal_code' => $this->input->post('postal_code', TRUE) ?: NULL,
 			'modified' => $modified_time
 		];
 
@@ -1135,19 +1170,29 @@ class Admin extends CI_Controller
 		];
 
 		$new_user_roles = [
-			'role_id' => $this->input->post('role'),
+			'role_id' => $this->input->post('role', TRUE),
 			'modified' => $modified_time
 		];
 
 		// --- داده‌های قبلی برای لاگ ---
-		$old_profile = (array)$this->base_model->get_data('profile', '*', ['user_id' => $id])[0];
-		$old_register = (array)$this->base_model->get_data('users', '*', ['id' => $id])[0];
-		$old_user_roles = (array)$this->base_model->get_data('user_roles', '*', ['user_id' => $id])[0];
+		$old_profile_row = $this->base_model->get_data('profile', '*', ['user_id' => $id]);
+		$old_register_row = $this->base_model->get_data('users', '*', ['id' => $id]);
+		$old_user_roles_row = $this->base_model->get_data('user_roles', '*', ['user_id' => $id]);
+
+		if (empty($old_profile_row) || empty($old_register_row) || empty($old_user_roles_row)) {
+			$this->session->set_flashdata('error', 'اطلاعات کاربر ناقص است');
+			redirect('admin/registered_users');
+			return;
+		}
+
+		$old_profile = (array)$old_profile_row[0];
+		$old_register = (array)$old_register_row[0];
+		$old_user_roles = (array)$old_user_roles_row[0];
 
 		$group_id = uniqid('grp_', true);
 		$phone_number = $old_register['phone_number'];
 
-		// --- لاگ پروفایل ---
+		// --- محاسبه تفاوت‌ها برای لاگ (قبل از آپدیت) ---
 		$diff_p_old = $diff_p_new = [];
 		foreach ($new_profile as $k => $v) {
 			if ((string)$old_profile[$k] !== (string)$v) {
@@ -1155,11 +1200,7 @@ class Admin extends CI_Controller
 				$diff_p_new[$k] = $v;
 			}
 		}
-		if (!empty($diff_p_old)) {
-			$this->base_model->add_log('profile', $id, 'update', $diff_p_old, $diff_p_new, 'ویرایش کاربر با شماره موبایل: ' . $phone_number, $group_id, 'ویرایش اطلاعات کاربر');
-		}
 
-		// --- لاگ کاربران ---
 		$diff_r_old = $diff_r_new = [];
 		foreach ($new_register as $k => $v) {
 			if ((string)$old_register[$k] !== (string)$v) {
@@ -1167,25 +1208,63 @@ class Admin extends CI_Controller
 				$diff_r_new[$k] = $v;
 			}
 		}
-		if (!empty($diff_r_old)) {
-			$this->base_model->add_log('users', $id, 'update', $diff_r_old, $diff_r_new, 'ویرایش کاربر با شماره موبایل: ' . $phone_number, $group_id, 'ویرایش اطلاعات کاربر');
-		}
 
-		// --- لاگ نقش کاربر ---
 		$diff_ur_old = $diff_ur_new = [];
 		if ((string)$old_user_roles['role_id'] !== (string)$new_user_roles['role_id']) {
 			$diff_ur_old['role_id'] = $old_user_roles['role_id'];
 			$diff_ur_new['role_id'] = $new_user_roles['role_id'];
-			$this->base_model->add_log('user_roles', $id, 'update', $diff_ur_old, $diff_ur_new, 'تغییر نقش کاربر با شماره موبایل: ' . $phone_number, $group_id, 'ویرایش نقش کاربر');
 		}
 
-		// --- آپدیت دیتابیس ---
-		$this->base_model->update_data('profile', $new_profile, ['user_id' => $id]);
-		$this->base_model->update_data('users', $new_register, ['id' => $id]);
-		$this->base_model->update_data('user_roles', $new_user_roles, ['user_id' => $id]);
+		// ✅ 6️⃣ آپدیت با Transaction
+		$this->db->trans_start();
 
-		redirect('admin/edit_user/'.$id);
+		try {
+			$this->base_model->update_data('profile', $new_profile, ['user_id' => $id]);
+			$this->base_model->update_data('users', $new_register, ['id' => $id]);
+			$this->base_model->update_data('user_roles', $new_user_roles, ['user_id' => $id]);
+
+			$this->db->trans_complete();
+
+			if ($this->db->trans_status() === FALSE) {
+				throw new Exception('خرابی در بروزرسانی اطلاعات');
+			}
+
+			// --- ثبت لاگ‌ها (فقط بعد از موفقیت تراکنش) ---
+			if (!empty($diff_p_old)) {
+				$this->base_model->add_log('profile', $id, 'update', $diff_p_old, $diff_p_new, 'ویرایش کاربر با شماره موبایل: ' . $phone_number, $group_id, 'ویرایش اطلاعات کاربر');
+			}
+
+			if (!empty($diff_r_old)) {
+				$this->base_model->add_log('users', $id, 'update', $diff_r_old, $diff_r_new, 'ویرایش کاربر با شماره موبایل: ' . $phone_number, $group_id, 'ویرایش اطلاعات کاربر');
+			}
+
+			if (!empty($diff_ur_old)) {
+				$this->base_model->add_log('user_roles', $id, 'update', $diff_ur_old, $diff_ur_new, 'تغییر نقش کاربر با شماره موبایل: ' . $phone_number, $group_id, 'ویرایش نقش کاربر');
+			}
+
+			$this->session->set_flashdata('success', 'کاربر با موفقیت ویرایش شد');
+			redirect('admin/registered_users');
+
+		} catch (Exception $e) {
+			$this->db->trans_rollback();
+			log_message('error', 'Edit User Error: ' . $e->getMessage());
+			$this->session->set_flashdata('error', 'خطا در ویرایش کاربر: ' . $e->getMessage());
+			redirect('admin/edit_user/'.$id);
+		}
 	}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 	public function check_permissions($table_name){
 		$is_user = $this->session->userdata('id');

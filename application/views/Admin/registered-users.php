@@ -1,10 +1,6 @@
-
-
-
 <?php if($this->session->userdata('id')){ ?>
 
 	<div class="container box" id="content" >
-<!--		<a href="--><?php //echo base_url('admin/edit_off_code/').$p->id.'/'.$p->code ?><!--">-->
 
 		<div>
 			<?php if (!empty($permissions['add']) && $permissions['add']): ?>
@@ -58,7 +54,7 @@
 		<div id="snackbar_del" class="snackbar">حذف با موفقیت انجام شد</div>
 		<div id="snackbar_ins" class="snackbar">درج با موفقیت انجام شد</div>
 		<div id="snackbar_upd" class="snackbar">ویرایش با موفقیت انجام شد</div>
-		<div id="snackbar_err" class="snackbar">عدم دسترسی</div>
+		<div id="snackbar_err" class="snackbar"><?php echo $this->session->flashdata('error') ?: 'عدم دسترسی'; ?></div>
 
 
 	</div>
@@ -69,7 +65,7 @@
 			<div class="modal-content " style="background-color: #fff">
 				<div class="modal-header text-center">
 					<button style="float: right;" type="button" class="close" data-dismiss="modal"><i
-								class="fa fa-close"></i></button>
+							class="fa fa-close"></i></button>
 					<h4 class="modal-title">بازنشانی رمز عبور</h4>
 				</div>
 				<div class="modal-body">
@@ -100,6 +96,15 @@
 <script type="text/javascript" language="javascript" >
 
 	$(document).ready(function(){
+		// ✅ نمایش پیام‌های flashdata که از صفحه دیگه (مثل edit_u) اومدن
+		<?php if ($this->session->flashdata('success')): ?>
+		showSnackbar('upd');
+		<?php endif; ?>
+
+		<?php if ($this->session->flashdata('error')): ?>
+		showSnackbar('err');
+		<?php endif; ?>
+
 		var dataTable = $('#usr_data').DataTable({
 			language: {
 				lengthMenu: "نمایش _MENU_ رکورد هر صفحه",
@@ -299,8 +304,10 @@
 		var new_pass = $("#new_pass_modal").val();
 		var re_new_pass = $("#re_new_pass_modal").val();
 
+		var postData = { 'id': id, 'new_pass': new_pass, 're_new_pass': re_new_pass };
+
 		$.post('<?= base_url("admin/reset_pass") ?>',
-			{ 'id': id, 'new_pass': new_pass, 're_new_pass': re_new_pass },
+			postData,
 			function (data) {
 				if (data == 1){
 					$('#reset_pass').modal('toggle');
