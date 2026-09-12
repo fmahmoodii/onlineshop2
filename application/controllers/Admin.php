@@ -1256,6 +1256,568 @@ class Admin extends CI_Controller
 
 
 
+	/**
+	 * ✅ حذف نرم دسترسی(ها) + پاک کردن ارتباطشون از نقش‌ها
+	 */
+	public function soft_delete_permission()
+	{
+		$this->check_permission(['delete', 'full'], 'permissions');
+
+		$post_data = $this->input->post(NULL, TRUE);
+
+		if (empty($post_data) || !isset($post_data['prm_ids']) || !is_array($post_data['prm_ids'])) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$prm_ids = $post_data['prm_ids'];
+
+		$perms_before = $this->base_model->get_data('permissions', '*', null, null, ['id' => $prm_ids]);
+		if (empty($perms_before)) {
+			echo json_encode(['status' => 0, 'message' => 'دسترسی مورد نظر یافت نشد']);
+			return;
+		}
+
+		$group_id = uniqid('grp_', true);
+
+		$this->db->trans_start();
+
+		// ✅ حذف نرم خود permission
+		$this->base_model->soft_delete('permissions', $prm_ids, true, 'id');
+
+		// ✅ پاک کردن کامل ارتباط این permission از همه نقش‌ها
+		$this->base_model->delete_data('role_permissions', null, ['permission_id' => $prm_ids]);
+
+		$this->db->trans_complete();
+
+		if ($this->db->trans_status() === FALSE) {
+			echo json_encode(['status' => 0, 'message' => 'خطا در حذف']);
+			return;
+		}
+
+		foreach ($perms_before as $perm) {
+			$permData = (array)$perm;
+			$this->base_model->add_log(
+				'permissions',
+				$perm->id,
+				'soft_delete',
+				$permData,
+				null,
+				'حذف دسترسی: ' . $perm->name,
+				$group_id,
+				'حذف دسترسی'
+			);
+		}
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ فعال/غیرفعال کردن دسترسی(ها)
+	 */
+	public function toggle_permission_status()
+	{
+		$logged_user_id = $this->check_permission(['edit', 'full'], 'permissions');
+
+		$post_data = $this->input->post(NULL, TRUE);
+
+		if (empty($post_data) || !isset($post_data['prm_ids']) || !is_array($post_data['prm_ids'])) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$prm_ids = $post_data['prm_ids'];
+		$status = isset($post_data['status']) ? intval($post_data['status']) : 1;
+
+		$perms_before = $this->base_model->get_data('permissions', '*', null, null, ['id' => $prm_ids]);
+		if (empty($perms_before)) {
+			echo json_encode(['status' => 0, 'message' => 'دسترسی مورد نظر یافت نشد']);
+			return;
+		}
+
+		$group_id = uniqid('grp_', true);
+
+		$this->db->trans_start();
+
+		foreach ($perms_before as $perm) {
+			$this->base_model->update_data('permissions', ['isActive' => $status], ['id' => $perm->id]);
+		}
+
+		$this->db->trans_complete();
+
+		if ($this->db->trans_status() === FALSE) {
+			echo json_encode(['status' => 0, 'message' => 'خطا در تغییر وضعیت']);
+			return;
+		}
+
+		foreach ($perms_before as $perm) {
+			$this->base_model->add_log(
+				'permissions',
+				$perm->id,
+				'update_status',
+				['isActive' => $perm->isActive],
+				['isActive' => $status],
+				($status ? 'فعالسازی ' : 'غیرفعالسازی ') . 'دسترسی: ' . $perm->name,
+				$group_id,
+				'تغییر وضعیت دسترسی'
+			);
+		}
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ نمایش صفحه تنظیمات دسترسی
+	 */
+	public function permissions()
+	{
+		$logged_user_id = $this->session->userdata('id');
+		if (!$logged_user_id) {
+			redirect('admin/login_page');
+			return;
+		}
+
+		$has_view = $this->base_model->has_permission($logged_user_id, ['view', 'full'], 'permissions');
+		if (!$has_view) {
+			$data['title'] = 'دسترسی غیرمجاز';
+			$this->load->view('admin/layout/header', $data);
+			$this->load->view('admin/layout/sidebar');
+			$this->load->view('admin/errors/no_permission');
+			return;
+		}
+
+		// ✅ اصلاح باگ: قبلاً کلید 'permissions' دوبار استفاده شده بود و مقدار اول پاک می‌شد
+		$data['action_permissions'] = [
+			'delete' => $this->base_model->has_permission($logged_user_id, ['delete', 'full'], 'permissions'),
+			'edit'   => $this->base_model->has_permission($logged_user_id, ['edit', 'full'], 'permissions'),
+			'add'    => $this->base_model->has_permission($logged_user_id, ['insert', 'full'], 'permissions'),
+			'view'   => $has_view,
+		];
+
+		// ✅ فقط چیزی که واقعاً توی ویو لازمه رو می‌فرستیم (بقیه از طریق AJAX لود می‌شن)
+		$data['roles'] = $this->base_model->get_data('roles', '*', ['isActive' => 1]);
+
+		$data['title'] = 'تنظیمات دسترسی';
+		$this->load->view('admin/layout/header', $data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/permissions', $data);
+	}
+
+	/**
+	 * ✅ لیست دسترسی‌ها برای DataTables
+	 */
+	public function permissions_list()
+	{
+		$user_id = $this->check_permission(['view', 'full'], 'permissions');
+
+		$post_data = $this->input->post(NULL, TRUE);
+
+		$columns = [
+			null,
+			'permissions.name',
+			'permissions.key_name',
+			'permissions.table_name',
+			null, // نقش‌های متصل (قابل جستجو/مرتب‌سازی نیست چون چندتاییه)
+			null,
+			null
+		];
+
+		$table  = 'permissions';
+		$select = '
+			permissions.id,
+			permissions.name,
+			permissions.key_name,
+			permissions.table_name AS table_name,
+			permissions.isActive
+		';
+
+		$result = $this->base_model->datatable(
+			$table,
+			$columns,
+			$post_data,
+			$select,
+			null,
+			null,
+			['permissions.table_name' => 'ASC', 'permissions.key_name' => 'DESC']
+		);
+
+		$permissions_check = [
+			'delete' => $this->base_model->has_permission($user_id, ['delete', 'full'], 'permissions'),
+			'edit'   => $this->base_model->has_permission($user_id, ['edit', 'full'], 'permissions'),
+		];
+
+		// ✅ گرفتن نقش‌های متصل به هر دسترسی (یکجا، نه توی حلقه با کوئری جدا)
+		$permission_ids = array_column($result['data'], 'id');
+		$roles_map = [];
+
+		if (!empty($permission_ids)) {
+			$role_links = $this->base_model->get_data(
+				'role_permissions',
+				'permission_id, roles.role_name',
+				['role_permissions.isActive' => 1],
+				null,                                    // like
+				['permission_id' => $permission_ids],     // where_in
+				null,                                     // where_not_in
+				null,                                     // or_where
+				['roles' => 'roles.id = role_permissions.role_id'] // join
+			);
+
+			foreach ($role_links as $link) {
+				$roles_map[$link->permission_id][] = $link->role_name;
+			}
+		}
+
+		$data = [];
+		foreach ($result['data'] as $row) {
+
+			$sub_array = [];
+
+			// Checkbox
+			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check" prm_id="'.$row->id.'">';
+
+			// Permission name
+			$sub_array[] = htmlspecialchars($row->name);
+
+			// key_name
+			$sub_array[] = htmlspecialchars($row->key_name);
+
+			// table_name
+			$sub_array[] = htmlspecialchars($row->table_name);
+
+			// ✅ نقش‌های متصل (به‌صورت badge)
+			$assigned_roles = isset($roles_map[$row->id]) ? $roles_map[$row->id] : [];
+			if (!empty($assigned_roles)) {
+				$badges = array_map(function($r) {
+					return '<span class="badge badge-info" style="margin-left:3px;">' . htmlspecialchars($r) . '</span>';
+				}, $assigned_roles);
+				$sub_array[] = implode(' ', $badges);
+			} else {
+				$sub_array[] = '<span class="text-muted">بدون نقش</span>';
+			}
+
+			// ✅ دکمه مدیریت نقش‌ها
+			$sub_array[] = '<button type="button" id="manage_roles" prm_id="'.$row->id.'" class="btn btn-info btn-xs"
+				'.($permissions_check['edit'] ? '' : 'data-no-permission="true"').'>
+				<i class="fa fa-users"></i> نقش‌ها
+			</button>';
+
+			// ✅ دکمه ویرایش
+			$sub_array[] = '<button type="button" id="edit_permission" prm_id="'.$row->id.'" class="btn btn-warning btn-xs"
+				'.($permissions_check['edit'] ? '' : 'data-no-permission="true"').'><i class="fa fa-edit fa-lg"></i></button>';
+
+			// Active / Deactive button
+			$sub_array[] = ($row->isActive == 0)
+				? '<button type="button" id="active" prm_id="'.$row->id.'" class="btn btn-primary btn-xs"
+					'.($permissions_check['edit'] ? '' : 'data-no-permission="true"').'>فعالسازی</button>'
+				: '<button type="button" id="deactive" prm_id="'.$row->id.'" class="btn btn-secondry btn-xs"
+					'.($permissions_check['edit'] ? '' : 'data-no-permission="true"').'>غیرفعالسازی</button>';
+
+			// ✅ دکمه حذف
+			$sub_array[] = '<button id="delete" prm_id="'.$row->id.'" class="btn btn-danger btn-xs"
+				'.($permissions_check['delete'] ? '' : 'data-no-permission="true"').'><i class="fa fa-trash fa-lg"></i></button>';
+
+			$data[] = $sub_array;
+		}
+
+		$output = [
+			"draw"            => isset($post_data['draw']) ? intval($post_data['draw']) : 0,
+			"recordsTotal"    => $result['recordsTotal'],
+			"recordsFiltered" => $result['recordsFiltered'],
+			"data"            => $data
+		];
+
+		echo json_encode($output);
+	}
+
+	/**
+	 * ✅ گرفتن اطلاعات یک دسترسی (برای پر کردن مودال ویرایش)
+	 */
+	public function get_permission()
+	{
+		$this->check_permission(['view', 'full'], 'permissions');
+
+		$id = $this->input->post('id', TRUE);
+		if (!$id) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$perm = $this->base_model->get_data('permissions', '*', ['id' => $id]);
+		if (empty($perm)) {
+			echo json_encode(['status' => 0, 'message' => 'یافت نشد']);
+			return;
+		}
+
+		echo json_encode(['status' => 1, 'data' => $perm[0]]);
+	}
+
+	/**
+	 * ✅ افزودن دسترسی جدید (از طریق مودال)
+	 */
+	public function insert_permission()
+	{
+		$this->check_permission(['insert', 'full'], 'permissions');
+
+		$name = $this->input->post('name', TRUE);
+		$key_name = $this->input->post('key_name', TRUE);
+		$table_name = $this->input->post('table_name', TRUE) ?: NULL;
+
+		if (empty($name) || empty($key_name)) {
+			echo json_encode(['status' => 0, 'message' => 'نام و کلید دسترسی الزامی است']);
+			return;
+		}
+
+		$now = date('Y-m-d H:i:s');
+		$data = [
+			'name'       => $name,
+			'key_name'   => $key_name,
+			'table_name' => $table_name,
+			'isActive'   => 1,
+			'created'    => $now,
+			'modified'   => $now
+		];
+
+		$new_id = $this->base_model->insert_data('permissions', $data);
+
+		if (!$new_id) {
+			echo json_encode(['status' => 0, 'message' => 'خطا در افزودن دسترسی']);
+			return;
+		}
+
+		$this->base_model->add_log(
+			'permissions', $new_id, 'insert', null, $data,
+			'افزودن دسترسی جدید: ' . $name, uniqid('grp_', true), 'افزودن دسترسی'
+		);
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ ویرایش دسترسی موجود (از طریق مودال)
+	 */
+	public function update_permission()
+	{
+		$this->check_permission(['edit', 'full'], 'permissions');
+
+		$id = $this->input->post('id', TRUE);
+		$name = $this->input->post('name', TRUE);
+		$key_name = $this->input->post('key_name', TRUE);
+		$table_name = $this->input->post('table_name', TRUE) ?: NULL;
+
+		if (!$id || empty($name) || empty($key_name)) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$old_row = $this->base_model->get_data('permissions', '*', ['id' => $id]);
+		if (empty($old_row)) {
+			echo json_encode(['status' => 0, 'message' => 'دسترسی یافت نشد']);
+			return;
+		}
+		$old = $old_row[0];
+
+		$now = date('Y-m-d H:i:s');
+		$new_data = [
+			'name'       => $name,
+			'key_name'   => $key_name,
+			'table_name' => $table_name,
+			'modified'   => $now
+		];
+
+		$this->base_model->update_data('permissions', $new_data, ['id' => $id]);
+
+		// --- محاسبه تفاوت برای لاگ ---
+		$diff_old = $diff_new = [];
+		foreach ($new_data as $k => $v) {
+			if ((string)$old->$k !== (string)$v) {
+				$diff_old[$k] = $old->$k;
+				$diff_new[$k] = $v;
+			}
+		}
+
+		if (!empty($diff_old)) {
+			$this->base_model->add_log(
+				'permissions', $id, 'update', $diff_old, $diff_new,
+				'ویرایش دسترسی: ' . $name, uniqid('grp_', true), 'ویرایش دسترسی'
+			);
+		}
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ افزودن گروهی یک یا چند نقش به چند دسترسی انتخاب‌شده (بدون حذف نقش‌های قبلی)
+	 */
+	public function bulk_assign_roles()
+	{
+		$this->check_permission(['edit', 'full'], 'permissions');
+
+		$post_data = $this->input->post(NULL, TRUE);
+		$prm_ids  = (isset($post_data['prm_ids']) && is_array($post_data['prm_ids'])) ? $post_data['prm_ids'] : [];
+		$role_ids = (isset($post_data['role_ids']) && is_array($post_data['role_ids'])) ? $post_data['role_ids'] : [];
+
+		if (empty($prm_ids) || empty($role_ids)) {
+			echo json_encode(['status' => 0, 'message' => 'حداقل یک دسترسی و یک نقش انتخاب کنید']);
+			return;
+		}
+
+		$now = date('Y-m-d H:i:s');
+		$group_id = uniqid('grp_', true);
+
+		$this->db->trans_start();
+
+		foreach ($prm_ids as $permission_id) {
+
+			// ✅ نقش‌های موجود این دسترسی رو می‌گیریم تا دوباره اضافه نشن (جلوگیری از تکراری)
+			$existing = $this->base_model->get_data(
+				'role_permissions', 'role_id',
+				['permission_id' => $permission_id, 'isActive' => 1]
+			);
+			$existing_role_ids = array_map(function($r) { return (int)$r->role_id; }, $existing);
+
+			$batch = [];
+			foreach ($role_ids as $role_id) {
+				if (!in_array((int)$role_id, $existing_role_ids)) {
+					$batch[] = [
+						'permission_id' => $permission_id,
+						'role_id'       => (int)$role_id,
+						'isActive'      => 1,
+						'created'       => $now,
+						'modified'      => $now
+					];
+				}
+			}
+
+			if (!empty($batch)) {
+				$this->base_model->insert_data('role_permissions', $batch, true);
+			}
+		}
+
+		$this->db->trans_complete();
+
+		if ($this->db->trans_status() === FALSE) {
+			echo json_encode(['status' => 0, 'message' => 'خطا در ذخیره‌سازی']);
+			return;
+		}
+
+		$this->base_model->add_log(
+			'role_permissions', null, 'bulk_assign', null,
+			['permission_ids' => $prm_ids, 'role_ids' => $role_ids],
+			'افزودن گروهی نقش به چند دسترسی', $group_id, 'افزودن گروهی نقش'
+		);
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ گرفتن نقش‌های فعلی یک دسترسی (برای پر کردن مودال)
+	 */
+	public function get_permission_roles()
+	{
+		$this->check_permission(['view', 'full'], 'permissions');
+
+		$permission_id = $this->input->post('permission_id', TRUE);
+
+		if (!$permission_id) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$links = $this->base_model->get_data(
+			'role_permissions',
+			'role_id',
+			['permission_id' => $permission_id, 'isActive' => 1]
+		);
+
+		$role_ids = array_map(function($r) { return (int)$r->role_id; }, $links);
+
+		echo json_encode(['status' => 1, 'role_ids' => $role_ids]);
+	}
+
+	/**
+	 * ✅ ذخیره نقش‌های انتخاب‌شده برای یک دسترسی (چندتایی)
+	 */
+	public function save_permission_roles()
+	{
+		$user_id = $this->check_permission(['edit', 'full'], 'permissions');
+
+		$permission_id = $this->input->post('permission_id', TRUE);
+		$role_ids = $this->input->post('role_ids', TRUE); // آرایه‌ای از role_id ها
+
+		if (!$permission_id) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		if (!is_array($role_ids)) {
+			$role_ids = [];
+		}
+
+		// ✅ بررسی وجود خود دسترسی
+		$perm_exists = $this->base_model->get_data('permissions', 'id, name', ['id' => $permission_id]);
+		if (empty($perm_exists)) {
+			echo json_encode(['status' => 0, 'message' => 'دسترسی مورد نظر یافت نشد']);
+			return;
+		}
+
+		// --- گرفتن وضعیت قبلی برای لاگ ---
+		$old_links = $this->base_model->get_data(
+			'role_permissions',
+			'role_id',
+			['permission_id' => $permission_id, 'isActive' => 1]
+		);
+		$old_role_ids = array_map(function($r) { return (int)$r->role_id; }, $old_links);
+
+		$group_id = uniqid('grp_', true);
+		$now = date('Y-m-d H:i:s');
+
+		$this->db->trans_start();
+
+		try {
+			// ✅ حذف همه ارتباط‌های قبلی این permission
+			$this->base_model->delete_data('role_permissions', ['permission_id' => $permission_id]);
+
+			// ✅ درج ارتباط‌های جدید
+			if (!empty($role_ids)) {
+				$batch_data = [];
+				foreach ($role_ids as $role_id) {
+					$batch_data[] = [
+						'permission_id' => $permission_id,
+						'role_id'       => (int)$role_id,
+						'isActive'      => 1,
+						'created'       => $now,
+						'modified'      => $now
+					];
+				}
+				$this->base_model->insert_data('role_permissions', $batch_data, true);
+			}
+
+			$this->db->trans_complete();
+
+			if ($this->db->trans_status() === FALSE) {
+				throw new Exception('خرابی در ذخیره‌سازی');
+			}
+
+			// --- ثبت لاگ ---
+			$this->base_model->add_log(
+				'role_permissions',
+				$permission_id,
+				'update',
+				['role_ids' => $old_role_ids],
+				['role_ids' => array_map('intval', $role_ids)],
+				'تغییر نقش‌های متصل به دسترسی: ' . $perm_exists[0]->name,
+				$group_id,
+				'مدیریت اتصال نقش به دسترسی'
+			);
+
+			echo json_encode(['status' => 1]);
+
+		} catch (Exception $e) {
+			$this->db->trans_rollback();
+			log_message('error', 'Save Permission Roles Error: ' . $e->getMessage());
+			echo json_encode(['status' => 0, 'message' => 'خطا در ذخیره‌سازی']);
+		}
+	}
 
 
 
@@ -1266,7 +1828,9 @@ class Admin extends CI_Controller
 
 
 
-	public function check_permissions($table_name){
+
+
+	/*public function check_permissions($table_name){
 		$is_user = $this->session->userdata('id');
 		$permissions = [
 			'delete' => $this->base_model->has_permission($is_user, ['delete', 'full'],
@@ -1380,7 +1944,7 @@ class Admin extends CI_Controller
 		];
 
 		echo json_encode($output);
-	}
+	}*/
 
 	/*public function delete_user()
 		{
@@ -1510,26 +2074,6 @@ class Admin extends CI_Controller
 				'status' => 1
 			]);
 		}*/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
