@@ -310,7 +310,7 @@ class Admin extends CI_Controller
 
 		$columns = [
 			null,
-			'roles.name',
+			'roles.role_name',
 			'profile.name',
 			'profile.family',
 			'users.phone_number',

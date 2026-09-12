@@ -37,12 +37,30 @@
 					<label for="checkbox">همه</label>
 					<input type="checkbox" id='check_all'>
 				</th>
-				<th width="15%">نوع کاربر</th>
-				<th width="15%">نام</th>
-				<th width="10%">نام خانوادگی</th>
-				<th width="10%">شماره موبایل</th>
-				<th width="10%">تاریخ ایجاد</th>
-				<th width="10%">آخرین ویرایش</th>
+				<th width="15%">
+					نوع کاربر<br>
+					<input type="text" class="form-control form-control-sm column-filter" placeholder="جستجو...">
+				</th>
+				<th width="15%">
+					نام<br>
+					<input type="text" class="form-control form-control-sm column-filter" placeholder="جستجو...">
+				</th>
+				<th width="10%">
+					نام خانوادگی<br>
+					<input type="text" class="form-control form-control-sm column-filter" placeholder="جستجو...">
+				</th>
+				<th width="10%">
+					شماره موبایل<br>
+					<input type="text" class="form-control form-control-sm column-filter" placeholder="جستجو...">
+				</th>
+				<th width="10%">
+					تاریخ ایجاد<br>
+					<input type="text" class="form-control form-control-sm column-filter" placeholder="جستجو...">
+				</th>
+				<th width="10%">
+					آخرین ویرایش<br>
+					<input type="text" class="form-control form-control-sm column-filter" placeholder="جستجو...">
+				</th>
 				<th width="10%">عملیات</th>
 				<th width="10%">رمز عبور</th>
 				<th width="10%">ویرایش</th>
@@ -137,8 +155,20 @@
 				{
 					"targets":[0, 8, 9, 10],
 					"orderable":false,
+					"searchable":false,
 				},
 			],
+		});
+
+		// ✅ وصل کردن هر input فیلتر به ستون مربوطه
+		$('.column-filter').on('keyup change', function () {
+			var columnIndex = $(this).closest('th').index();
+			dataTable.column(columnIndex).search(this.value).draw();
+		});
+
+		// جلوگیری از سابمیت فرم یا رفتار پیش‌فرض موقع کلیک روی هدر (مرتب‌سازی) وقتی داخل inputها هستیم
+		$('.column-filter').on('click', function (e) {
+			e.stopPropagation();
 		});
 	});
 

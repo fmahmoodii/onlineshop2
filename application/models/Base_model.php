@@ -279,6 +279,17 @@ class base_model extends CI_Model
 			$this->db->group_end();
 		}
 
+		// ✅ فیلتر جداگانه هر ستون (Column-specific search)
+		if (isset($post_data['columns']) && is_array($post_data['columns'])) {
+			foreach ($post_data['columns'] as $i => $col_data) {
+				if (!empty($col_data['search']['value']) && isset($columns[$i]) && $columns[$i] !== null) {
+					$field = explode(' as ', $columns[$i]);
+					$col_name = trim($field[0]);
+					$this->db->like($col_name, $col_data['search']['value']);
+				}
+			}
+		}
+
 		// ---- شمارش بعد از فیلتر ----
 		$recordsFiltered = $this->db->count_all_results('', false);
 
