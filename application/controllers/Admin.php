@@ -647,7 +647,7 @@ class Admin extends CI_Controller
 
 				$user_before = (array) $user_before[0]; // برای ذخیره در old_value
 				$old_value = $user_before;
-				unset($old_value['password']); // ✅ حذف هش پسورد قدیمی از لاگ
+				unset($old_value['password']); //  حذف هش پسورد قدیمی از لاگ
 
 				// هش کردن رمز جدید
 				$hashed_pass = password_hash($new_pass, PASSWORD_BCRYPT);
@@ -658,7 +658,7 @@ class Admin extends CI_Controller
 				// گرفتن اطلاعات جدید بعد از آپدیت
 				$user_after = $this->base_model->get_data('users', '*', ['id' => $id]);
 				$user_after = isset($user_after[0]) ? (array) $user_after[0] : [];
-				unset($user_after['password']); // ✅ حذف هش پسورد جدید از لاگ
+				unset($user_after['password']); //  حذف هش پسورد جدید از لاگ
 
 				// آماده‌سازی داده‌های لاگ
 				$group_id = uniqid('grp_', true);
@@ -1031,9 +1031,8 @@ class Admin extends CI_Controller
 		$this->form_validation->set_rules($rules);
 	}
 
-
 	/**
-	 * ✅ نمایش فرم ویرایش کاربر
+	 *  نمایش فرم ویرایش کاربر
 	 */
 	public function edit_user($id)
 	{
@@ -1069,7 +1068,7 @@ class Admin extends CI_Controller
 		$data['city']=$this->base_model->get_data('city','*');
 		$data['users']=$this->base_model-> get_data('users','*',array('id'=>$id));
 
-		// ✅ پیدا کردن role_id کاربر بدون نیاز به join/alias
+		//  پیدا کردن role_id کاربر بدون نیاز به join/alias
 		$current_user_role = $this->base_model->get_data('user_roles', 'role_id', ['user_id' => $id]);
 		$data['user_data'] = !empty($current_user_role)
 			? [ (object) ['user_id' => $id, 'role_id' => $current_user_role[0]->role_id] ]
@@ -1082,7 +1081,7 @@ class Admin extends CI_Controller
 	}
 
 	/**
-	 * ✅ ثبت تغییرات ویرایش کاربر
+	 *  ثبت تغییرات ویرایش کاربر
 	 */
 	public function edit_u($id)
 	{
@@ -1147,10 +1146,10 @@ class Admin extends CI_Controller
 			return $this->edit_user($id);
 		}
 
-		// ✅ زمان صحیح (فقط میلادی، مطابق ستون DATETIME)
+		//  زمان صحیح (فقط میلادی، مطابق ستون DATETIME)
 		$modified_time = date('Y-m-d H:i:s');
 
-		// ✅ نرمال‌سازی شماره موبایل ضروری
+		//  نرمال‌سازی شماره موبایل ضروری
 		$phone_number1 = $this->_normalize_phone($this->input->post('phone_number1', TRUE));
 
 		// داده‌های جدید (با فیلتر XSS)
@@ -1215,7 +1214,7 @@ class Admin extends CI_Controller
 			$diff_ur_new['role_id'] = $new_user_roles['role_id'];
 		}
 
-		// ✅ 6️⃣ آپدیت با Transaction
+		//  6️⃣ آپدیت با Transaction
 		$this->db->trans_start();
 
 		try {
@@ -1253,11 +1252,8 @@ class Admin extends CI_Controller
 		}
 	}
 
-
-
-
 	/**
-	 * ✅ حذف نرم دسترسی(ها) + پاک کردن ارتباطشون از نقش‌ها
+	 *  حذف نرم دسترسی(ها) + پاک کردن ارتباطشون از نقش‌ها
 	 */
 	public function soft_delete_permission()
 	{
@@ -1282,10 +1278,10 @@ class Admin extends CI_Controller
 
 		$this->db->trans_start();
 
-		// ✅ حذف نرم خود permission
+		//  حذف نرم خود permission
 		$this->base_model->soft_delete('permissions', $prm_ids, true, 'id');
 
-		// ✅ پاک کردن کامل ارتباط این permission از همه نقش‌ها
+		//  پاک کردن کامل ارتباط این permission از همه نقش‌ها
 		$this->base_model->delete_data('role_permissions', null, ['permission_id' => $prm_ids]);
 
 		$this->db->trans_complete();
@@ -1313,7 +1309,7 @@ class Admin extends CI_Controller
 	}
 
 	/**
-	 * ✅ فعال/غیرفعال کردن دسترسی(ها)
+	 *  فعال/غیرفعال کردن دسترسی(ها)
 	 */
 	public function toggle_permission_status()
 	{
@@ -1367,7 +1363,7 @@ class Admin extends CI_Controller
 	}
 
 	/**
-	 * ✅ نمایش صفحه تنظیمات دسترسی
+	 *  نمایش صفحه تنظیمات دسترسی
 	 */
 	public function permissions()
 	{
@@ -1386,7 +1382,7 @@ class Admin extends CI_Controller
 			return;
 		}
 
-		// ✅ اصلاح باگ: قبلاً کلید 'permissions' دوبار استفاده شده بود و مقدار اول پاک می‌شد
+		//  اصلاح باگ: قبلاً کلید 'permissions' دوبار استفاده شده بود و مقدار اول پاک می‌شد
 		$data['action_permissions'] = [
 			'delete' => $this->base_model->has_permission($logged_user_id, ['delete', 'full'], 'permissions'),
 			'edit'   => $this->base_model->has_permission($logged_user_id, ['edit', 'full'], 'permissions'),
@@ -1394,7 +1390,7 @@ class Admin extends CI_Controller
 			'view'   => $has_view,
 		];
 
-		// ✅ فقط چیزی که واقعاً توی ویو لازمه رو می‌فرستیم (بقیه از طریق AJAX لود می‌شن)
+		//  فقط چیزی که واقعاً توی ویو لازمه رو می‌فرستیم (بقیه از طریق AJAX لود می‌شن)
 		$data['roles'] = $this->base_model->get_data('roles', '*', ['isActive' => 1]);
 
 		$data['title'] = 'تنظیمات دسترسی';
@@ -1404,7 +1400,7 @@ class Admin extends CI_Controller
 	}
 
 	/**
-	 * ✅ لیست دسترسی‌ها برای DataTables
+	 *  لیست دسترسی‌ها برای DataTables
 	 */
 	public function permissions_list()
 	{
@@ -1446,7 +1442,7 @@ class Admin extends CI_Controller
 			'edit'   => $this->base_model->has_permission($user_id, ['edit', 'full'], 'permissions'),
 		];
 
-		// ✅ گرفتن نقش‌های متصل به هر دسترسی (یکجا، نه توی حلقه با کوئری جدا)
+		//  گرفتن نقش‌های متصل به هر دسترسی (یکجا، نه توی حلقه با کوئری جدا)
 		$permission_ids = array_column($result['data'], 'id');
 		$roles_map = [];
 
@@ -1484,7 +1480,7 @@ class Admin extends CI_Controller
 			// table_name
 			$sub_array[] = htmlspecialchars($row->table_name);
 
-			// ✅ نقش‌های متصل (به‌صورت badge)
+			//  نقش‌های متصل (به‌صورت badge)
 			$assigned_roles = isset($roles_map[$row->id]) ? $roles_map[$row->id] : [];
 			if (!empty($assigned_roles)) {
 				$badges = array_map(function($r) {
@@ -1495,14 +1491,14 @@ class Admin extends CI_Controller
 				$sub_array[] = '<span class="text-muted">بدون نقش</span>';
 			}
 
-			// ✅ دکمه مدیریت نقش‌ها
+			//  دکمه مدیریت نقش‌ها
 			$sub_array[] = '<button type="button" id="manage_roles" prm_id="'.$row->id.'" class="btn btn-info btn-xs"
 				'.($permissions_check['edit'] ? '' : 'data-no-permission="true"').'>
 				<i class="fa fa-users"></i> نقش‌ها
 			</button>';
 
-			// ✅ دکمه ویرایش
-			$sub_array[] = '<button type="button" id="edit_permission" prm_id="'.$row->id.'" class="btn btn-warning btn-xs"
+			//  دکمه ویرایش
+			$sub_array[] = '<button type="button" id="edit_permission" prm_id="'.$row->id.'" class="btn btn-warning"
 				'.($permissions_check['edit'] ? '' : 'data-no-permission="true"').'><i class="fa fa-edit fa-lg"></i></button>';
 
 			// Active / Deactive button
@@ -1512,8 +1508,8 @@ class Admin extends CI_Controller
 				: '<button type="button" id="deactive" prm_id="'.$row->id.'" class="btn btn-secondry btn-xs"
 					'.($permissions_check['edit'] ? '' : 'data-no-permission="true"').'>غیرفعالسازی</button>';
 
-			// ✅ دکمه حذف
-			$sub_array[] = '<button id="delete" prm_id="'.$row->id.'" class="btn btn-danger btn-xs"
+			//  دکمه حذف
+			$sub_array[] = '<button id="delete" prm_id="'.$row->id.'" class="btn btn-danger"
 				'.($permissions_check['delete'] ? '' : 'data-no-permission="true"').'><i class="fa fa-trash fa-lg"></i></button>';
 
 			$data[] = $sub_array;
@@ -1530,7 +1526,7 @@ class Admin extends CI_Controller
 	}
 
 	/**
-	 * ✅ گرفتن اطلاعات یک دسترسی (برای پر کردن مودال ویرایش)
+	 *  گرفتن اطلاعات یک دسترسی (برای پر کردن مودال ویرایش)
 	 */
 	public function get_permission()
 	{
@@ -1552,7 +1548,7 @@ class Admin extends CI_Controller
 	}
 
 	/**
-	 * ✅ افزودن دسترسی جدید (از طریق مودال)
+	 *  افزودن دسترسی جدید (از طریق مودال)
 	 */
 	public function insert_permission()
 	{
@@ -1593,7 +1589,7 @@ class Admin extends CI_Controller
 	}
 
 	/**
-	 * ✅ ویرایش دسترسی موجود (از طریق مودال)
+	 *  ویرایش دسترسی موجود (از طریق مودال)
 	 */
 	public function update_permission()
 	{
@@ -1646,7 +1642,7 @@ class Admin extends CI_Controller
 	}
 
 	/**
-	 * ✅ افزودن گروهی یک یا چند نقش به چند دسترسی انتخاب‌شده (بدون حذف نقش‌های قبلی)
+	 *  افزودن گروهی یک یا چند نقش به چند دسترسی انتخاب‌شده (بدون حذف نقش‌های قبلی)
 	 */
 	public function bulk_assign_roles()
 	{
@@ -1668,7 +1664,7 @@ class Admin extends CI_Controller
 
 		foreach ($prm_ids as $permission_id) {
 
-			// ✅ نقش‌های موجود این دسترسی رو می‌گیریم تا دوباره اضافه نشن (جلوگیری از تکراری)
+			//  نقش‌های موجود این دسترسی رو می‌گیریم تا دوباره اضافه نشن (جلوگیری از تکراری)
 			$existing = $this->base_model->get_data(
 				'role_permissions', 'role_id',
 				['permission_id' => $permission_id, 'isActive' => 1]
@@ -1710,7 +1706,7 @@ class Admin extends CI_Controller
 	}
 
 	/**
-	 * ✅ گرفتن نقش‌های فعلی یک دسترسی (برای پر کردن مودال)
+	 *  گرفتن نقش‌های فعلی یک دسترسی (برای پر کردن مودال)
 	 */
 	public function get_permission_roles()
 	{
@@ -1735,7 +1731,7 @@ class Admin extends CI_Controller
 	}
 
 	/**
-	 * ✅ ذخیره نقش‌های انتخاب‌شده برای یک دسترسی (چندتایی)
+	 *  ذخیره نقش‌های انتخاب‌شده برای یک دسترسی (چندتایی)
 	 */
 	public function save_permission_roles()
 	{
@@ -1753,7 +1749,7 @@ class Admin extends CI_Controller
 			$role_ids = [];
 		}
 
-		// ✅ بررسی وجود خود دسترسی
+		//  بررسی وجود خود دسترسی
 		$perm_exists = $this->base_model->get_data('permissions', 'id, name', ['id' => $permission_id]);
 		if (empty($perm_exists)) {
 			echo json_encode(['status' => 0, 'message' => 'دسترسی مورد نظر یافت نشد']);
@@ -1774,10 +1770,10 @@ class Admin extends CI_Controller
 		$this->db->trans_start();
 
 		try {
-			// ✅ حذف همه ارتباط‌های قبلی این permission
+			//  حذف همه ارتباط‌های قبلی این permission
 			$this->base_model->delete_data('role_permissions', ['permission_id' => $permission_id]);
 
-			// ✅ درج ارتباط‌های جدید
+			//  درج ارتباط‌های جدید
 			if (!empty($role_ids)) {
 				$batch_data = [];
 				foreach ($role_ids as $role_id) {
@@ -1826,903 +1822,480 @@ class Admin extends CI_Controller
 
 
 
-
-
-
-
-	/*public function check_permissions($table_name){
-		$is_user = $this->session->userdata('id');
-		$permissions = [
-			'delete' => $this->base_model->has_permission($is_user, ['delete', 'full'],
-				'$table_name'),
-
-			'edit'   => $this->base_model->has_permission($is_user, ['edit', 'full'],
-				'$table_name'),
-
-			'add'    => $this->base_model->has_permission($is_user, ['insert', 'full'],
-				'$table_name'),
-
-			'view'    => $this->base_model->has_permission($is_user, ['view', 'full'],
-				'$table_name')
-		];
-
-		$data['permissions'] = $permissions;
-	}
-
-	public function permissions(){
-		$is_user = $this->session->userdata('id');
-		$permissions = [
-			'delete' => $this->base_model->has_permission($is_user, ['delete', 'full'],
-				'permissions'),
-
-			'edit'   => $this->base_model->has_permission($is_user, ['edit', 'full'],
-				'permissions'),
-
-			'add'    => $this->base_model->has_permission($is_user, ['insert', 'full'],
-				'permissions'),
-
-			'view'    => $this->base_model->has_permission($is_user, ['view', 'full'],
-				'permissions')
-		];
-
-		$data['permissions'] = $permissions;
-
-		$data['users']=$this->base_model->get_data('users','*');
-		$data['roles']=$this->base_model->get_data('roles','*');
-		$data['user_roles']=$this->base_model->get_data('user_roles','*');
-		$data['permissions']=$this->base_model->get_data('permissions','*');
-		$data['role_permissions']=$this->base_model->get_data('role_permissions','*');
-
-		$data['title']='تنظیمات دسترسی';
-		$this->load->view('admin/layout/header',$data);
-		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/permissions');
-	}
-
-	public function permissions_list()
+	/**
+	 * ✅ نمایش صفحه مدیریت دسته‌بندی
+	 */
+	public function categories()
 	{
-		$columns = [
-			null,
-			'permissions.name',
-			'permissions.key_name',
-			'permissions.table_name',
-			null,
-			null
-		];
-		$table  = 'permissions';
-		$select = '
-        permissions.id,
-        permissions.name,
-        permissions.key_name,
-        permissions.table_name AS table,    
-        permissions.isActive    
-    ';
-
-		$result = $this->base_model->datatable(
-			$table,
-			$columns,
-			$_POST,
-			$select,
-			null,
-			null,
-			['permissions.table_name' => 'ASC', 'permissions.key_name' => 'DESC']
-		);
-
-
-		$data = [];
-		foreach ($result['data'] as $row) {
-
-			$sub_array = [];
-
-			// Checkbox
-			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check">';
-
-			// Permission name
-			$sub_array[] = htmlspecialchars($row->name);
-
-			// key_name
-			$sub_array[] = htmlspecialchars($row->key_name);
-
-			// table_name
-			$sub_array[] = htmlspecialchars($row->table);
-
-			// Active / Deactive button
-			$sub_array[] = ($row->isActive == 0)
-				? '<button type="button" id="active" prm_id="'.$row->id.'" class="btn btn-primary btn-xs">فعالسازی</button>'
-				: '<button type="button" id="deactive" prm_id="'.$row->id.'" class="btn btn-secondry btn-xs">غیرفعالسازی</button>';
-
-			$sub_array[] = '';
-
-			$data[] = $sub_array;
-		}
-
-		$output = [
-			"draw"            => intval($_POST["draw"]),
-			"recordsTotal"    => $result['recordsTotal'],
-			"recordsFiltered" => $result['recordsFiltered'],
-			"data"            => $data
-		];
-
-		echo json_encode($output);
-	}*/
-
-	/*public function delete_user()
-		{
-			// 1️⃣ چک دسترسی
-			$is_user = $this->session->userdata('id');
-
-			if (!$this->base_model->has_permission(
-				$is_user,
-				['حذف کاربر', 'دسترسی کامل'],
-				'users'
-			)) {
-				echo json_encode([
-					'status'  => 0,
-					'message' => 'شما دسترسی حذف کاربر را ندارید'
-				]);
-				return;
-			}
-
-			// 2️⃣ اعتبارسنجی ورودی
-			if (!$_POST || !isset($_POST['user_ids']) || !is_array($_POST['user_ids'])) {
-				echo json_encode([
-					'status'  => 0,
-					'message' => 'داده نامعتبر است'
-				]);
-				return;
-			}
-
-			$user_ids = $_POST['user_ids'];
-
-			// 3️⃣ جلوگیری از حذف خود کاربر لاگین‌شده
-			if (in_array($is_user, $user_ids)) {
-				echo json_encode([
-					'status'  => 0,
-					'message' => 'امکان حذف حساب کاربری خودتان وجود ندارد'
-				]);
-				return;
-			}
-
-			// (اختیاری) جلوگیری از حذف کاربر سیستمی
-			$protected_users = [1]; // user_id سیستمی
-			if (array_intersect($protected_users, $user_ids)) {
-				echo json_encode([
-					'status'  => 0,
-					'message' => 'امکان حذف کاربر سیستمی وجود ندارد'
-				]);
-				return;
-			}
-
-			$group_id      = uniqid('grp_', true);
-			$operationInfo = "حذف کاربران";
-
-			// گرفتن اطلاعات قبل از حذف
-			$users = $this->base_model->get_data('users', '*', null, null, null, ['id' => $user_ids]);
-			$profiles = $this->base_model->get_data('profile', '*', null, null, null, ['user_id' => $user_ids]);
-			$user_roles = $this->base_model->get_data('user_roles', '*', null, null, null, ['user_id' => $user_ids]);
-
-			// map پروفایل
-			$profileMap = [];
-			foreach ($profiles as $p) {
-				$profileMap[$p->user_id] = $p;
-			}
-
-			// 4️⃣ حذف با transaction
-			$this->db->trans_start();
-
-			$this->db->where_in('user_id', $user_ids)->delete('profile');
-			$this->db->where_in('user_id', $user_ids)->delete('user_roles');
-			$this->db->where_in('id', $user_ids)->delete('users');
-
-			$this->db->trans_complete();
-
-			if ($this->db->trans_status() === FALSE) {
-				echo json_encode([
-					'status'  => 0,
-					'message' => 'خطا در حذف کاربران'
-				]);
-				return;
-			}
-
-			// 5️⃣ ثبت لاگ‌ها
-			foreach ($users as $user) {
-				$fullName = isset($profileMap[$user->id])
-					? $profileMap[$user->id]->name . ' ' . $profileMap[$user->id]->family
-					: 'نامشخص';
-
-				$this->base_model->add_log(
-					'users',
-					$user->id,
-					'delete',
-					(array)$user,
-					null,
-					'حذف کاربر: ' . $fullName,
-					$group_id,
-					$operationInfo
-				);
-			}
-
-			foreach ($profiles as $p) {
-				$this->base_model->add_log(
-					'profile',
-					$p->id,
-					'delete',
-					(array)$p,
-					null,
-					'حذف کاربر: ' . $p->name . ' ' . $p->family,
-					$group_id,
-					$operationInfo
-				);
-			}
-
-			foreach ($user_roles as $ur) {
-				$fullName = isset($profileMap[$user->id])
-					? $profileMap[$user->id]->name . ' ' . $profileMap[$user->id]->family
-					: 'نامشخص';
-
-				$this->base_model->add_log(
-					'user_roles',
-					$ur->id,
-					'delete',
-					(array)$ur,
-					null, 'حذف نقش کاربر با user_id: ' . $fullName,
-					$group_id,
-					$operationInfo );
-			}
-
-			echo json_encode([
-				'status' => 1
-			]);
-		}*/
-
-
-
-
-
-	public function category_test20()
-	{
-		$data['title']='دسته بندی محصولات';
-		for($i='1';$i<='10';$i++){
-			$data['category'.$i]=$this->base_model->get_data('category_test','*');
-		}
-//		$data['category1']=$this->base_model->get_data('category_test','*');
-//		$data['category2']=$this->base_model->get_data('category_test','*');
-		$this->load->view('admin/layout/header',$data);
-		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/cat-test3');
-
-	}
-//	public function getCategoryTree($level = 0, $prefix = '') {
-//		$rows = $this->db
-//			->select('id,parentId,name_cat')
-//			->where('parentId', $level)
-//			->order_by('id','asc')
-//			->get('category_test')
-//			->result();
-//
-//		$category = '';
-//		if (count($rows) > 0) {
-//			foreach ($rows as $row) {
-//				$category .= $prefix . $row->name_cat . "\n";
-//				// Append subcategories
-//				$category .= $this->getCategoryTree($row->id, $prefix . '-');
-//			}
-//		}
-//		return $category;
-//	}
-	public function getCategoryTree($level = 0, $prefix = 2) {
-		$rows = $this->db
-			->select('id,parentId,name_cat')
-			->where('parentId', $level)
-			->order_by('id','asc')
-			->get('category_test')
-			->result();
-
-		$category = '';
-
-		if (count($rows) > 0) {
-			foreach ($rows as $row) {
-				$id = $row->id;
-				$name_cat = $row->name_cat;
-				$category .=
-				'<div id="box_'.$id.'" id_cat="'.$id.'">
-				<div style="margin-right: '.$prefix.'px;position: relative;border: 0.5px solid #ccc;padding: 10px"t="'.$id.'">
-				<i style="display: none; " id="plus_'.$id.'" class="fa fa-plus plus" id_cat="'.$id.'"></i>
-				<i style="display: inline; " id="minus_'.$id.'" class="fa fa-minus minus" id_cat="'.$id.'"></i>
-				<span class="" style="display: inline-block;width: 100px;white-space: nowrap; overflow: hidden !important;text-overflow: ellipsis;" id_cat="'.$id.'">'.$name_cat.'</span>
-				<div style="display: inline; margin-right: 20px;padding: 5px;background-color: #fcecec">
-					<button class="btn btn-default btn-sm" type="button" id="add" id_cat="'.$id.'" >
-						<i class="fa fa-plus"></i>
-					</button>
-					<button class="btn btn-default btn-sm" type="button" id="edit" id_cat="'.$id.'" >
-						<i class="fa fa-edit"></i>
-					</button>
-					<button class="btn btn-default btn-sm" type="button" id="delete" id_cat="'.$id.'" >
-						<i class="fa fa-trash"></i>
-					</button>
-				</div>
-				<br>
-			</div>
-			</div>
-			
-			';
-					// Append subcategories
-				$category .= $this->getCategoryTree($row->id, 20+$prefix);
-			}
-		}
-		return $category;
-	}
-
-	public function cat_minus($parentId) {
-		$rows = $this->db
-			->select('id,parentId,name_cat')
-			->where('parentId', $parentId)
-			->order_by('id','asc')
-			->get('category_test')
-			->result();
-
-		$data = '';
-
-		if (count($rows) > 0) {
-			foreach ($rows as $row) {
-				$data .= $row->id.",". $this->cat_minus($row->id);
-			}
-		}
-
-		echo $data;
-	}
-
-//	public function category_test2()
-//	{
-//
-//		$data['title']='دسته بندی محصولات';
-//		$data['cat']= $this->getCategoryTree();
-//
-//		$this->load->view('admin/layout/header',$data);
-//		$this->load->view('admin/layout/sidebar');
-//		$this->load->view('admin/cat-test3');
-//
-//	}
-	public function category_test2()
-	{
-		$data['title']='دسته بندی محصولات';
-		$flat = $this->base_model->get_categories_with_user();
-		$data['categories'] = $this->base_model->build_tree($flat);
-		$this->load->view('admin/layout/header',$data);
-
-		$this->load->view('admin/cat-test4');
-	}
-	public function getCategories() {
-		$query = $this->db->get('category_test');
-		$categories = $query->result_array();
-
-		// ساختار درختی با level
-		$tree = $this->buildTree($categories);
-		echo json_encode(['data' => $tree]);
-	}
-
-	private function buildTree($categories, $parentId = 0, $level = 0) {
-		$branch = [];
-		foreach ($categories as $category) {
-			if ($category['parentId'] == $parentId) {
-				$category['level'] = $level;
-				$children = $this->buildTree($categories, $category['id'], $level + 1);
-				if ($children) {
-					$category['children'] = $children;
-				}
-				$branch[] = $category;
-			}
-		}
-		return $branch;
-	}
-
-	public function category_test()
-	{
-
-		$data['title']='دسته بندی محصولات';
-		for($i='1';$i<='10';$i++){
-			$data['category'.$i]=$this->base_model->get_data('category_test','*');
-		}
-
-
-//		$data['category1']=$this->base_model->get_data('category_test','*');
-//		$data['category2']=$this->base_model->get_data('category_test','*');
-		$this->load->view('admin/layout/header',$data);
-		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/cat-test');
-
-	}
-	public function insert_cat(){
-		if ($this->input->post()) {
-			date_default_timezone_set("Asia/Tehran");
-
-			$data = [
-				'created'   => $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s'),
-				'modified'   => $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s'),
-				'isActive'  => 1,
-				'name_cat'  => $this->input->post('name_cat'),
-				'parentId'  => $this->input->post('parentId')
-			];
-
-			$insert_id = $this->base_model->insert('category_test', $data);
-
-			if ($insert_id) {
-				$data['id'] = $insert_id;
-
-				echo json_encode(['success' => true, 'data' => $data]);
-			} else {
-				echo json_encode(['success' => false]);
-			}
-		}
-	}
-
-
-
-
-//	public function insert_cat(){
-//		if ($_POST){
-//			date_default_timezone_set("Asia/Tehran");
-//			$data['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-//			$data['isActive']='1';
-//			$data['name_cat']=$_POST['name_cat'];
-//			$name_cat=$_POST['name_cat'];
-//			$data['parentId']=$_POST['parentId'];
-//			$mar=$_POST['mar'];
-////			$parentId=$_POST['parentId'];
-////			$data['level']=$_POST['level'];
-////			$level=$_POST['level'];
-////			$details=$level+1;
-////			$f=($level-1)*25;
-//
-//			$id = $this->base_model->insert('category_test', $data);
-//
-//			$output = '';
-//			$output .=
-//					'<div id="box_'.$id.'" id_cat="'.$id.'">
-//					<div style="margin-right: '.$mar.'px;position: relative;border: 0.5px solid #ccc;padding: 10px" id_cat="'.$id.'">
-//				<i style="display: none; " id="plus_'.$id.'" class="fa fa-plus plus" id_cat="'.$id.'"></i>
-//				<i style="display: inline; " id="minus_'.$id.'" class="fa fa-minus minus" id_cat="'.$id.'"></i>
-//				<span class="" style="display: inline-block;width: 100px;white-space: nowrap; overflow: hidden !important;text-overflow: ellipsis;" id_cat="'.$id.'">'.$name_cat.'</span>
-//				<div style="display: inline; margin-right: 20px;padding: 5px;background-color: #fcecec">
-//					<button class="btn btn-default btn-sm" type="button" id="add" id_cat="'.$id.'" >
-//						<i class="fa fa-plus"></i>
-//					</button>
-//					<button class="btn btn-default btn-sm" type="button" id="edit" id_cat="'.$id.'" >
-//						<i class="fa fa-edit"></i>
-//					</button>
-//					<button class="btn btn-default btn-sm" type="button" id="delete" id_cat="'.$id.'" >
-//						<i class="fa fa-trash"></i>
-//					</button>
-//				</div>
-//				<br>
-//			</div>
-//			</div>
-//			';
-//
-//
-//
-//
-//			echo $output;
-//		}
-//	}
-	public function delete_category()
-	{
-		$this->output->set_content_type('application/json');
-
-
-		$id = (int) $this->input->post('id');
-		if (!$id) {
-			echo json_encode(['success' => false, 'message' => 'invalid id']);
+		$logged_user_id = $this->session->userdata('id');
+		if (!$logged_user_id) {
+			redirect('admin/login_page');
 			return;
 		}
 
-		// --- حذف دسته و فرزندانِ مستقیم (طبق کدی که داشتی) ---
-		$this->base_model->delete_row('category_test', 'id', $id);
-		$this->base_model->delete_row('category_test', 'parentId', $id);
-
-		// آپدیت محصولات (همون منطق خودت)
-		$dataUpdate = ['id_cat1' => ''];
-		$this->base_model->update('products', ['id_cat1' => $id], $dataUpdate);
-		$products = $this->base_model->get_data('products','id_cat2',['id_cat1'=>$id]);
-		foreach ($products as $p){
-			$this->base_model->update('products', ['id_cat2' => $p->id_cat2], $dataUpdate);
-		}
-
-		echo json_encode(['success' => true]);
-	}
-
-
-//	public function delete_category(){
-//		if ($_POST) {
-//			$id = $_POST['id'];
-//			$this->base_model->delete_row('category_test', 'id', $id);
-//			$this->base_model->delete_row('category_test', 'parentId', $id);
-//
-//			$data['id_cat1'] = '';
-//			$this->base_model->update('products', array('id_cat1' => $id), $data);
-//			$products=$this->base_model->get_data('products','id_cat2',array('id_cat1'=>$id));
-//			foreach ($products as $p){
-//				$id_cat2 = $p->id_cat2;
-//				$this->base_model->update('products', array('id_cat2' => $id_cat2), $data);
-//			}
-//
-//		}
-//	}
-	function search()
-	{
-		$query = '';
-
-		if($this->input->post('query'))
-		{
-			$query = $this->input->post('query');
-		}
-		$data = $this->base_model->search($query);
-
-
-		$ids = array();
-
-		if($data->num_rows() > 0)
-		{
-			foreach($data->result() as $row)
-			{
-				$ids[] = $row->id;
-			}
-		}
-
-		echo json_encode($ids);
-	}
-
-
-
-	public function category()
-	{
-		if(isset($_SESSION['id'])){
-
-			$data['title']='دسته بندی محصولات';
-			$data['category1']=$this->base_model->get_data('category1','*');
-			$data['category2']=$this->base_model->get_data('category2','*');
-			$this->load->view('admin/layout/header',$data);
+		if (!$this->base_model->has_permission($logged_user_id, ['view', 'full'], 'category')) {
+			$data['title'] = 'دسترسی غیرمجاز';
+			$this->load->view('admin/layout/header', $data);
 			$this->load->view('admin/layout/sidebar');
-			$this->load->view('admin/category');
+			$this->load->view('admin/errors/no_permission');
+			return;
 		}
+
+		$data['action_permissions'] = [
+			'delete' => $this->base_model->has_permission($logged_user_id, ['delete', 'full'], 'category'),
+			'edit'   => $this->base_model->has_permission($logged_user_id, ['edit', 'full'], 'category'),
+			'add'    => $this->base_model->has_permission($logged_user_id, ['insert', 'full'], 'category'),
+		];
+
+		$data['title'] = 'دسته‌بندی محصولات';
+		$this->load->view('admin/layout/header', $data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/categories', $data);
 	}
-	public function category_list(){
-		$fetch_data = $this->base_model->category_make_datatables();
-		$data = array();
 
-		foreach($fetch_data as $row)
-		{
+	/**
+	 * ✅ لیست دسته‌بندی‌ها به‌صورت جدول تخت با تورفتگی (بر اساس عمق درخت)
+	 * توجه: چون تعداد دسته‌ها معمولاً زیاد نیست، از DataTables سمت کلاینت استفاده می‌کنیم
+	 * (نه serverSide) تا بتونیم ترتیب درختی رو خودمون توی PHP بسازیم.
+	 */
+	public function categories_list()
+	{
+		$this->check_permission(['view', 'full'], 'category');
 
-			$sub_array = array();
-			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check" id_cat1="'.$row->id_cat1.'" id_cat2="'.$row->id_cat2.'"></input> ';
-			$sub_array[] = $row->name_cat1;
-			$sub_array[] = $row->name_cat2;
-			$sub_array[] = '
-			<button type="button" id="copy" id_cat1="'.$row->id_cat1.'" id_cat2="'.$row->id_cat2.'" class="btn btn-info btn-xs">کپی</button>
-			';
-			$sub_array[] = '
-			<button type="button" id="edit" id_cat1="'.$row->id_cat1.'" id_cat2="'.$row->id_cat2.'" class="btn btn-warning btn-xs">ویرایش</button>
-			';
-			$sub_array[] = '<button type="button" id="delete" id_cat1="'.$row->id_cat1.'" id_cat2="'.$row->id_cat2.'" class="btn btn-danger btn-xs">حذف</button>';
+		$all = $this->base_model->get_data(
+			'categories', '*', null, null, null, null, null, null,
+			['parentId' => 'ASC', 'name_cat' => 'ASC']
+		);
+
+		// ✅ گروه‌بندی بر اساس parentId برای ساخت درخت
+		$by_parent = [];
+		foreach ($all as $row) {
+			$by_parent[(string)$row->parentId][] = $row;
+		}
+
+		$flat = [];
+		$this->_flatten_category_tree($by_parent, '0', 0, $flat);
+
+		// ✅ نگاشت id -> name برای نمایش «دسته والد»
+		$id_to_name = [];
+		foreach ($all as $row) {
+			$id_to_name[(string)$row->id] = $row->name_cat;
+		}
+
+		$permissions_check = [
+			'delete' => $this->base_model->has_permission($this->session->userdata('id'), ['delete', 'full'], 'category'),
+			'edit'   => $this->base_model->has_permission($this->session->userdata('id'), ['edit', 'full'], 'category'),
+		];
+
+		$data = [];
+		foreach ($flat as $item) {
+			$node  = $item['node'];
+			$depth = $item['depth'];
+
+			// ✅ تعداد محصولات این دسته (بر اساس هم‌آیدی بودن با category1/category2)
+			$product_count = $this->db
+				->where('id_cat1', $node->id)
+				->or_where('id_cat2', $node->id)
+				->count_all_results('products');
+
+			$sub_array = [];
+
+			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check" cat_id="'.$node->id.'">';
+
+			// ✅ نام با تورفتگی بر اساس عمق
+			$prefix = str_repeat('&nbsp;&nbsp;&nbsp;&nbsp;', $depth) . ($depth > 0 ? '└─ ' : '');
+			$sub_array[] = $prefix . htmlspecialchars($node->name_cat);
+
+			// ✅ دسته والد
+			$sub_array[] = ($node->parentId != '0' && isset($id_to_name[(string)$node->parentId]))
+				? htmlspecialchars($id_to_name[(string)$node->parentId])
+				: '<span class="text-muted">— سطح اول —</span>';
+
+			// توضیحات
+			$sub_array[] = htmlspecialchars($node->details);
+
+			// تعداد محصولات
+			$sub_array[] = $product_count;
+
+			// وضعیت
+			$sub_array[] = ($node->isActive == 0)
+				? '<button type="button" id="active" cat_id="'.$node->id.'" class="btn btn-primary btn-xs"
+					'.($permissions_check['edit'] ? '' : 'data-no-permission="true"').'>فعالسازی</button>'
+				: '<button type="button" id="deactive" cat_id="'.$node->id.'" class="btn btn-secondry btn-xs"
+					'.($permissions_check['edit'] ? '' : 'data-no-permission="true"').'>غیرفعالسازی</button>';
+
+			// افزودن زیردسته
+			$sub_array[] = '<button type="button" id="add_sub" cat_id="'.$node->id.'" class="btn btn-success btn-xs"
+				'.($permissions_check['edit'] ? '' : 'data-no-permission="true"').'><i class="fa fa-plus"></i></button>';
+
+			// ویرایش
+			$sub_array[] = '<button type="button" id="edit_category" cat_id="'.$node->id.'" class="btn btn-warning btn-xs"
+				'.($permissions_check['edit'] ? '' : 'data-no-permission="true"').'><i class="fa fa-edit fa-lg"></i></button>';
+
+			// حذف
+			$sub_array[] = '<button id="delete" cat_id="'.$node->id.'" class="btn btn-danger btn-xs"
+				'.($permissions_check['delete'] ? '' : 'data-no-permission="true"').'><i class="fa fa-trash fa-lg"></i></button>';
 
 			$data[] = $sub_array;
 		}
-		$output = array(
-			"draw"                    =>     intval($_POST["draw"]),
-			"recordsTotal"          =>      $this->base_model->category_get_all_data(),
-			"recordsFiltered"     =>     $this->base_model->category_get_filtered_data(),
-			"data"                    =>     $data
-		);
-		echo json_encode($output);
+
+		echo json_encode(['data' => $data]);
 	}
+
+	/**
+	 * ✅ تبدیل لیست تخت (parentId) به آرایه‌ی مرتب درختی (عمق‌محور)
+	 */
+	private function _flatten_category_tree($by_parent, $parent_id, $depth, &$flat)
+	{
+		if (!isset($by_parent[$parent_id])) return;
+
+		foreach ($by_parent[$parent_id] as $node) {
+			$flat[] = ['node' => $node, 'depth' => $depth];
+			$this->_flatten_category_tree($by_parent, (string)$node->id, $depth + 1, $flat);
+		}
+	}
+
+	/**
+	 * ✅ گرفتن لیست همه دسته‌ها برای پر کردن select والد در مودال
+	 */
+	public function get_categories_for_select()
+	{
+		$this->check_permission(['view', 'full'], 'category');
+
+		$exclude_id = $this->input->post('exclude_id', TRUE); // موقع ویرایش، خود دسته نباید تو لیست باشه
+
+		$all = $this->base_model->get_data(
+			'categories', '*', null, null, null, null, null, null,
+			['parentId' => 'ASC', 'name_cat' => 'ASC']
+		);
+
+		$by_parent = [];
+		foreach ($all as $row) {
+			$by_parent[(string)$row->parentId][] = $row;
+		}
+
+		// ✅ اگه در حال ویرایش هستیم، خود دسته + همه‌ی زیردسته‌هاش رو باید حذف کنیم
+		// (تا نتونه به فرزند خودش وصل بشه و چرخه ایجاد نشه)
+		$excluded_ids = [];
+		if ($exclude_id) {
+			$this->_collect_descendant_ids($by_parent, (string)$exclude_id, $excluded_ids);
+			$excluded_ids[] = (string)$exclude_id;
+		}
+
+		$flat = [];
+		$this->_flatten_category_tree($by_parent, '0', 0, $flat);
+
+		$options = [];
+		foreach ($flat as $item) {
+			if (in_array((string)$item['node']->id, $excluded_ids)) continue;
+
+			$options[] = [
+				'id'    => $item['node']->id,
+				'label' => str_repeat('— ', $item['depth']) . $item['node']->name_cat
+			];
+		}
+
+		echo json_encode(['status' => 1, 'options' => $options]);
+	}
+
+	/**
+	 * ✅ جمع‌آوری بازگشتی id همه‌ی زیرمجموعه‌های یک دسته (برای جلوگیری از چرخه)
+	 */
+	private function _collect_descendant_ids($by_parent, $parent_id, &$result)
+	{
+		if (!isset($by_parent[$parent_id])) return;
+
+		foreach ($by_parent[$parent_id] as $node) {
+			$result[] = (string)$node->id;
+			$this->_collect_descendant_ids($by_parent, (string)$node->id, $result);
+		}
+	}
+
+	/**
+	 * ✅ گرفتن اطلاعات یک دسته (برای مودال ویرایش)
+	 */
+	public function get_category()
+	{
+		$this->check_permission(['view', 'full'], 'category');
+
+		$id = $this->input->post('id', TRUE);
+		if (!$id) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$cat = $this->base_model->get_data('categories', '*', ['id' => $id]);
+		if (empty($cat)) {
+			echo json_encode(['status' => 0, 'message' => 'یافت نشد']);
+			return;
+		}
+
+		echo json_encode(['status' => 1, 'data' => $cat[0]]);
+	}
+
+	/**
+	 * ✅ افزودن دسته جدید (سطح اول یا زیردسته)
+	 */
 	public function insert_category()
 	{
-		if(isset($_SESSION['id'])){
+		$this->check_permission(['insert', 'full'], 'category');
 
-			$data['title']='دسته بندی جدید';
-			$data['category1']=$this->base_model->get_data('category1','*');
-			$data['category2']=$this->base_model->get_data('category2','*');
-			$this->load->view('admin/layout/header',$data);
-			$this->load->view('admin/layout/sidebar');
-			$this->load->view('admin/insert_category');
-		}
-	}
-	public function insert_cat1()
-	{
-		if ($_POST){
-			date_default_timezone_set("Asia/Tehran");
-			$data['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-			$data['isActive']='1';
-			$data['name_cat1']=$_POST['name_cat1'];
-			$id=$this->base_model->insert('category1', $data);
-			$category1=$this->base_model->get_data('category1','*',array('id'=>$id));
-			echo json_encode($category1);
-		}
-	}
-	public function insert_cat2()
-	{
-		if ($_POST){
-			date_default_timezone_set("Asia/Tehran");
-			$data['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-			$data['isActive']='1';
-			$data['id_cat1']=$_POST['id_cat1'];
-			$data['name_cat2']=$_POST['name_cat2'];
-			$id=$this->base_model->insert('category2', $data);
-			$category2=$this->base_model->get_data('category2','*',array('id'=>$id));
-			echo json_encode($category2);
-		}
-	}
-	public function get_category2(){
-		$id_cat1=$this->input->post('id_cat1');
-		$Category2=$this->base_model->get_data('category2','*',array('id_cat1'=>$id_cat1));
-		$result='<option value="">انتخاب کنید</option>';
-		foreach($Category2 as $row){
-			$result=$result."<option value='$row->id'>$row->name_cat2</option>";
-		}
-		echo $result;
-	}
+		$name = $this->input->post('name_cat', TRUE);
+		$parent_id = $this->input->post('parentId', TRUE) ?: '0';
+		$details = $this->input->post('details', TRUE);
 
-	public function category1()
-	{
-		if(isset($_SESSION['id'])){
-
-			$data['title']='سطح اول';
-			$data['category1']=$this->base_model->get_data('category1','*');
-			$data['category2']=$this->base_model->get_data('category2','*');
-			$this->load->view('admin/layout/header',$data);
-			$this->load->view('admin/layout/sidebar');
-			$this->load->view('admin/category1');
+		if (empty($name)) {
+			echo json_encode(['status' => 0, 'message' => 'نام دسته الزامی است']);
+			return;
 		}
-	}
-	public function category1_list(){
-		$fetch_data = $this->base_model->category1_make_datatables();
-		$data = array();
 
-		foreach($fetch_data as $row)
-		{
+		$now = date('Y-m-d H:i:s');
+		$data = [
+			'parentId'  => $parent_id,
+			'name_cat'  => $name,
+			'details'   => $details,
+			'isActive'  => 1,
+			'created'   => $now,
+			'modified'  => $now
+		];
 
-			$sub_array = array();
-			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check" value="'.$row->id.'" id_cat1="'.$row->id.'"></input> ';
-			$sub_array[] = '<span id="name_' . $row->id . '">'.$row->name_cat1.'</span>';
-			if($row->IsActive==0) {$sub_array[] = '<span style="color: red;font-size: 12px;">غیرفعال</span>';}
-			else if($row->IsActive==1){$sub_array[] = '<span style="color: green;font-size: 12px;">فعال</span>';}
-			$sub_array[] = $row->created;
-			$sub_array[] = $row->modified;
-			if($row->IsActive==0) {$sub_array[] = '<button type="button" id="active" id_cat1="'.$row->id.'"  class="btn btn-primary btn-xs">فعال سازی</button>';}
-			else if($row->IsActive==1){$sub_array[] = '<button type="button" id="deactive" id_cat1="'.$row->id.'"  class="btn btn-secondary btn-xs">غیرفعال سازی</button>';}
-			$sub_array[] = '
-			<button type="button" id="edit" id_cat1="'.$row->id.'" class="btn btn-warning">
-			<i class="fa fa-edit"></i>
-</button>
-			';
-			$sub_array[] = '<button type="button" id="delete" id_cat1="'.$row->id.'" class="btn btn-danger">
-<i class="fa fa-trash"></i>
-</button>';
+		$new_id = $this->base_model->insert_data('categories', $data);
 
-			$data[] = $sub_array;
+		if (!$new_id) {
+			echo json_encode(['status' => 0, 'message' => 'خطا در افزودن دسته']);
+			return;
 		}
-		$output = array(
-			"draw"                    =>     intval($_POST["draw"]),
-			"recordsTotal"          =>      $this->base_model->category1_get_all_data(),
-			"recordsFiltered"     =>     $this->base_model->category1_get_filtered_data(),
-			"data"                    =>     $data
+
+		$this->base_model->add_log(
+			'categories', $new_id, 'insert', null, $data,
+			'افزودن دسته جدید: ' . $name, uniqid('grp_', true), 'افزودن دسته'
 		);
-		echo json_encode($output);
+
+		echo json_encode(['status' => 1]);
 	}
-	public function edit_cat1(){
-		if ($_POST) {
-			$id = $_POST['id'];
-			date_default_timezone_set("Asia/Tehran");
-			$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-			$data['name_cat1'] = $_POST['name_cat1'];
-			$this->base_model->update('category1', array('id' => $id), $data);
-			echo 1;
-		}
-	}
-	public function cat2_product(){
-		$id = $_POST['id'];
-		$i=0;
-		$j=0;
-		$products=$this->base_model->get_data('products','*',array('id_cat1'=>$id));
-		$category2=$this->base_model->get_data('category2','*',array('id_cat1'=>$id));
-		if(isset($products[0])){foreach ($products as $p){
-			$data['prd'] = ++$i;
-		}}else{
-			$data['prd'] = 0;
-		}
-		if(isset($category2[0])){foreach ($category2 as $cat2){
-			$data['cat2'] = ++$j;
-		}}else{
-		$data['cat2'] = 0;
-		}
-		echo json_encode($data);
-	}
-	public function cat2_product_2(){
-		if (isset($_POST['ids'])) {
-			$id = explode(',', $_POST['ids']);
-			$products = $this->base_model->get_datas('products', '*', 'id_cat1', $id);
-			$category2 = $this->base_model->get_datas('category2', '*', 'id_cat1', $id);
-		}
-		$i = 0;
-		$j = 0;
-		if(isset($products[0])){foreach ($products as $p){
-			$data['prd'] = ++$i;
-		}}else{
-			$data['prd'] = 0;
-		}
-		if(isset($category2[0])){foreach ($category2 as $cat2){
-			$data['cat2'] = ++$j;
-		}}else{
-			$data['cat2'] = 0;
-		}
-		echo json_encode($data);
-	}
-	public function delete_cat1()
+
+	/**
+	 * ✅ ویرایش دسته (با جلوگیری از چرخه در انتخاب والد)
+	 */
+	public function update_category()
 	{
-		if ($_POST) {
-			$id = $_POST['id'];
-			$this->base_model->delete_row('category1', 'id', $id);
-			$this->base_model->delete_row('category2', 'id_cat1', $id);
-			$data['id_cat1'] = '';
-			$this->base_model->update('products', array('id_cat1' => $id), $data);
-			$products=$this->base_model->get_data('products','id_cat2',array('id_cat1'=>$id));
-			foreach ($products as $p){
-				$id_cat2 = $p->id_cat2;
-				$this->base_model->update('products', array('id_cat2' => $id_cat2), $data);
-			}
+		$this->check_permission(['edit', 'full'], 'category');
 
-//			$this->base_model->delete_row('products', 'id_cat1', $id);
-//			$products=$this->base_model->get_data('products','*',array('id_cat1'=>$id));
-//			$this->base_model->delete_row('images', 'user_id', $products->code);
-			echo 1;
-		}
-	}
-	public function delete_cats1_checked() {
-		if (isset($_POST['ids'])) {
-			$ids = explode(',', $_POST['ids']);
+		$id = $this->input->post('id', TRUE);
+		$name = $this->input->post('name_cat', TRUE);
+		$parent_id = $this->input->post('parentId', TRUE) ?: '0';
+		$details = $this->input->post('details', TRUE);
 
-			$results1 = $this->base_model->delete_rows_by_ids($ids,'category1');
-			$results2 = $this->base_model->delete_rows_by_col('id_cat1', $ids, 'category2');
-
-			$data['id_cat1'] = '';
-			$this->base_model->update_rows_by_col('id_cat1',$ids,'products', $data);
-			$results3 = $products=$this->base_model->get_data('products','id_cat2',array('id_cat1'=>$id));
-			foreach ($products as $p){
-				$id_cat2 = $p->id_cat2;
-				$results4 = $this->base_model->update('products', array('id_cat2' => $id_cat2), $data);
-			}
-
-			if ($results1 === TRUE && $results2 === TRUE && $results3 === TRUE && $results4 === TRUE) {
-				echo '<span style="color:green;">row(s) successfully deleted</span>';
-			} else {
-				echo '<span style="color:red;">Something went wrong during row deletion</span>';
-			}
-		} else {
-			echo '<span style="color:red;">You must select at least one row for deletion</span>';
-		}
-	}
-	public function edit_cats1_checked(){
-
-		if ($_POST) {
-			$ids = explode(',', $_POST['id']);
-
-			date_default_timezone_set("Asia/Tehran");
-			$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-			if($_POST['name']!=''){
-				$data['name_cat1'] = $_POST['name'];}
-			$this->base_model->update_rows_by_col('id',$ids,'category1',$data);
-
-
+		if (!$id || empty($name)) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
 		}
 
+		// ✅ جلوگیری از انتخاب خود دسته یا یکی از زیردسته‌هاش به‌عنوان والد (جلوگیری از چرخه)
+		if ((string)$parent_id === (string)$id) {
+			echo json_encode(['status' => 0, 'message' => 'دسته نمی‌تواند والد خودش باشد']);
+			return;
+		}
+
+		$all = $this->base_model->get_data('categories', '*');
+		$by_parent = [];
+		foreach ($all as $row) {
+			$by_parent[(string)$row->parentId][] = $row;
+		}
+		$descendants = [];
+		$this->_collect_descendant_ids($by_parent, (string)$id, $descendants);
+
+		if (in_array((string)$parent_id, $descendants)) {
+			echo json_encode(['status' => 0, 'message' => 'نمی‌توان یکی از زیردسته‌ها را به‌عنوان والد انتخاب کرد']);
+			return;
+		}
+
+		$old_row = $this->base_model->get_data('categories', '*', ['id' => $id]);
+		if (empty($old_row)) {
+			echo json_encode(['status' => 0, 'message' => 'دسته یافت نشد']);
+			return;
+		}
+		$old = $old_row[0];
+
+		$now = date('Y-m-d H:i:s');
+		$new_data = [
+			'name_cat' => $name,
+			'parentId' => $parent_id,
+			'details'  => $details,
+			'modified' => $now
+		];
+
+		$this->base_model->update_data('categories', $new_data, ['id' => $id]);
+
+		$diff_old = $diff_new = [];
+		foreach ($new_data as $k => $v) {
+			if ((string)$old->$k !== (string)$v) {
+				$diff_old[$k] = $old->$k;
+				$diff_new[$k] = $v;
+			}
+		}
+
+		if (!empty($diff_old)) {
+			$this->base_model->add_log(
+				'categories', $id, 'update', $diff_old, $diff_new,
+				'ویرایش دسته: ' . $name, uniqid('grp_', true), 'ویرایش دسته'
+			);
+		}
+
+		echo json_encode(['status' => 1]);
 	}
 
-	public function category2()
+	/**
+	 * ✅ فعال/غیرفعال کردن دسته(ها)
+	 */
+	public function toggle_category_status()
 	{
-		if(isset($_SESSION['id'])){
+		$this->check_permission(['edit', 'full'], 'category');
 
-			$data['title']='سطح دوم';
-			$data['category1']=$this->base_model->get_data('category1','*');
-			$data['category2']=$this->base_model->get_data('category2','*');
-			$this->load->view('admin/layout/header',$data);
-			$this->load->view('admin/layout/sidebar');
-			$this->load->view('admin/category2');
+		$post_data = $this->input->post(NULL, TRUE);
+
+		if (empty($post_data) || !isset($post_data['cat_ids']) || !is_array($post_data['cat_ids'])) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
 		}
-	}
-	public function category2_list(){
-		$fetch_data = $this->base_model->category2_make_datatables();
-		$data = array();
 
-		foreach($fetch_data as $row)
-		{
+		$cat_ids = $post_data['cat_ids'];
+		$status = isset($post_data['status']) ? intval($post_data['status']) : 1;
 
-			$sub_array = array();
-			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check" value="'.$row->id.'" id_cat2="'.$row->id.'"></input> ';
-			$sub_array[] = '<span id="name_' . $row->id . '">'.$row->name_cat2.'</span>';
-			if($row->IsActive==0) {$sub_array[] = '<span style="color: red;font-size: 12px;">غیرفعال</span>';}
-			else if($row->IsActive==1){$sub_array[] = '<span style="color: green;font-size: 12px;">فعال</span>';}
-			$sub_array[] = $row->created;
-			$sub_array[] = $row->modified;
-			if($row->IsActive==0) {$sub_array[] = '<button type="button" id="active" id_cat2="'.$row->id.'"  class="btn btn-primary btn-xs">فعال سازی</button>';}
-			else if($row->IsActive==1){$sub_array[] = '<button type="button" id="deactive" id_cat2="'.$row->id.'"  class="btn btn-secondary btn-xs">غیرفعال سازی</button>';}
-			$sub_array[] = '
-			<button type="button" id="edit"  id_cat2="'.$row->id.'" class="btn btn-warning">
-			<i class="fa fa-edit"></i>
-</button>
-			';
-			$sub_array[] = '<button type="button" id="delete"  id_cat2="'.$row->id.'" class="btn btn-danger">
-<i class="fa fa-trash"></i>
-</button>';
-
-			$data[] = $sub_array;
+		$cats_before = $this->base_model->get_data('categories', '*', null, null, ['id' => $cat_ids]);
+		if (empty($cats_before)) {
+			echo json_encode(['status' => 0, 'message' => 'دسته مورد نظر یافت نشد']);
+			return;
 		}
-		$output = array(
-			"draw"                    =>     intval($_POST["draw"]),
-			"recordsTotal"          =>      $this->base_model->category2_get_all_data(),
-			"recordsFiltered"     =>     $this->base_model->category2_get_filtered_data(),
-			"data"                    =>     $data
-		);
-		echo json_encode($output);
-	}
-	public function edit_cat2(){
-		if ($_POST) {
-			$id = $_POST['id'];
-			date_default_timezone_set("Asia/Tehran");
-			$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-			$data['name_cat2'] = $_POST['name_cat2'];
-			$this->base_model->update('category2', array('id' => $id), $data);
-			echo 1;
+
+		// ✅ فعال/غیرفعال کردن زنجیره‌ای: تمام زیردسته‌های هر دسته انتخاب‌شده رو هم پیدا می‌کنیم
+		$all_categories = $this->base_model->get_data('categories', '*');
+		$by_parent = [];
+		foreach ($all_categories as $row) {
+			$by_parent[(string)$row->parentId][] = $row;
 		}
+
+		$all_affected_ids = $cat_ids;
+		foreach ($cat_ids as $id) {
+			$descendants = [];
+			$this->_collect_descendant_ids($by_parent, (string)$id, $descendants);
+			$all_affected_ids = array_merge($all_affected_ids, $descendants);
+		}
+		$all_affected_ids = array_unique($all_affected_ids);
+
+		// ✅ گرفتن اطلاعات کامل همه‌ی دسته‌های تحت‌تأثیر (برای لاگ درست)
+		$all_affected_cats = $this->base_model->get_data('categories', '*', null, null, ['id' => $all_affected_ids]);
+
+		$group_id = uniqid('grp_', true);
+
+		$this->db->trans_start();
+		foreach ($all_affected_cats as $cat) {
+			$this->base_model->update_data('categories', ['isActive' => $status], ['id' => $cat->id]);
+		}
+		$this->db->trans_complete();
+
+		if ($this->db->trans_status() === FALSE) {
+			echo json_encode(['status' => 0, 'message' => 'خطا در تغییر وضعیت']);
+			return;
+		}
+
+		foreach ($all_affected_cats as $cat) {
+			$this->base_model->add_log(
+				'categories', $cat->id, 'update_status',
+				['isActive' => $cat->isActive], ['isActive' => $status],
+				($status ? 'فعالسازی ' : 'غیرفعالسازی ') . 'دسته: ' . $cat->name_cat,
+				$group_id, 'تغییر وضعیت دسته (زنجیره‌ای)'
+			);
+		}
+
+		echo json_encode(['status' => 1]);
 	}
-	public function delete_cat2()
+
+	/**
+	 * ✅ حذف نرم دسته(ها) - اگر زیردسته‌ی فعال داشته باشه، اجازه حذف نمی‌ده
+	 */
+	public function soft_delete_category()
 	{
-		if ($_POST) {
-			$id = $_POST['id'];
-			$data['id_cat2'] = $_POST[''];
-			$this->base_model->delete_row('category2', 'id', $id);
-			$this->base_model->update('products', array('id_cat2' => $id), $data);
-			echo 1;
+		$this->check_permission(['delete', 'full'], 'category');
+
+		$post_data = $this->input->post(NULL, TRUE);
+
+		if (empty($post_data) || !isset($post_data['cat_ids']) || !is_array($post_data['cat_ids'])) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
 		}
-	}
-	public function delete_cats2_checked() {
-		if (isset($_POST['ids'])) {
-			$ids = explode(',', $_POST['ids']);
 
-			$results1 = $this->base_model->delete_rows_by_ids($ids,'category2');
-//			$results2 = $this->base_model->delete_rows_by_col('id_cat2', $ids, 'category3');
+		$cat_ids = $post_data['cat_ids'];
 
-//			$data['id_cat2'] = '';
-//			$this->base_model->update_rows_by_col('id_cat2',$ids,'products', $data);
-//			$results3 = $products=$this->base_model->get_data('products','id_cat3',array('id_cat2'=>$id));
-//			foreach ($products as $p){
-//				$id_cat3 = $p->id_cat3;
-//				$results4 = $this->base_model->update('products', array('id_cat3' => $id_cat2), $data);
-//			}
+		$cats_before = $this->base_model->get_data('categories', '*', null, null, ['id' => $cat_ids]);
+		if (empty($cats_before)) {
+			echo json_encode(['status' => 0, 'message' => 'دسته مورد نظر یافت نشد']);
+			return;
+		}
 
-			if ($results1 === TRUE) {
-				echo '<span style="color:green;">row(s) successfully deleted</span>';
-			} else {
-				echo '<span style="color:red;">Something went wrong during row deletion</span>';
+		// ✅ بررسی اینکه هیچ‌کدوم زیردسته‌ی فعال (حذف‌نشده) نداشته باشن
+		foreach ($cats_before as $cat) {
+			$children = $this->base_model->get_data('categories', 'id', ['parentId' => $cat->id]);
+			if (!empty($children)) {
+				echo json_encode([
+					'status' => 0,
+					'message' => 'دسته «' . $cat->name_cat . '» دارای زیردسته است. ابتدا زیردسته‌ها را حذف یا منتقل کنید.'
+				]);
+				return;
 			}
-		} else {
-			echo '<span style="color:red;">You must select at least one row for deletion</span>';
-		}
-	}
-	public function edit_cats2_checked(){
-
-		if ($_POST) {
-			$ids = explode(',', $_POST['id']);
-
-			date_default_timezone_set("Asia/Tehran");
-			$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-			if($_POST['name']!=''){
-				$data['name_cat2'] = $_POST['name'];}
-			$this->base_model->update_rows_by_col('id',$ids,'category2',$data);
-
-
 		}
 
+		// ✅ بررسی اینکه هیچ‌کدوم محصول متصل نداشته باشن
+		foreach ($cats_before as $cat) {
+			$product_count = $this->db
+				->where('id_cat1', $cat->id)
+				->or_where('id_cat2', $cat->id)
+				->count_all_results('products');
+
+			if ($product_count > 0) {
+				echo json_encode([
+					'status' => 0,
+					'message' => 'دسته «' . $cat->name_cat . '» دارای ' . $product_count . ' محصول است. ابتدا محصولات را به دسته دیگری منتقل کنید.'
+				]);
+				return;
+			}
+		}
+
+		$group_id = uniqid('grp_', true);
+
+		$this->db->trans_start();
+		$this->base_model->soft_delete('categories', $cat_ids, true, 'id');
+		$this->db->trans_complete();
+
+		if ($this->db->trans_status() === FALSE) {
+			echo json_encode(['status' => 0, 'message' => 'خطا در حذف']);
+			return;
+		}
+
+		foreach ($cats_before as $cat) {
+			$this->base_model->add_log(
+				'categories', $cat->id, 'soft_delete', (array)$cat, null,
+				'حذف دسته: ' . $cat->name_cat, $group_id, 'حذف دسته'
+			);
+		}
+
+		echo json_encode(['status' => 1]);
 	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 	function add_attr()
 	{

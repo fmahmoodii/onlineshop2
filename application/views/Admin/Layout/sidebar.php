@@ -37,11 +37,7 @@
 				<a href="<?php echo base_url()?>admin"><li id="dashboard" >داشبورد</li></a>
 <!--				<a href="--><?php //echo base_url()?><!--admin/category_test2"><li id="category3" >دسته بندی محصول-تستی3</li></a>-->
 				<a href="<?php echo base_url()?>admin1/categories"><li id="category3" >دسته بندی محصول-تستی3</li></a>
-				<a href="<?php echo base_url()?>admin/category"><li id="category" >دسته بندی محصول</li></a>
-				<ul id="list2" class="ul2">
-					<a href="<?php echo base_url()?>admin/category1"><li>سطح 1</li></a>
-					<a href="<?php echo base_url()?>admin/category2"><li>سطح 2</li></a>
-				</ul>
+				<a href="<?php echo base_url()?>admin/categories"><li id="category" >دسته بندی محصول</li></a>
 				<a href="<?php echo base_url()?>admin/insert_product"><li id="insert_product" >محصول گذاری</li></a>
 				<ul id="list2" class="ul2">
 					<a href="<?php echo base_url()?>admin/model"><li>مدل</li></a>
