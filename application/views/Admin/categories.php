@@ -232,7 +232,7 @@
 					$('#cf_name').val(res.data.name_cat);
 					$('#cf_details').val(res.data.details);
 					$('#cf_name_err').text('');
-					loadParentOptions(res.data.id, res.data.parentId, false);
+					loadParentOptions(res.data.id, res.data.parentId, true);
 					$('#category_form_modal').modal();
 				} else {
 					alert(res.message ?? 'خطا در دریافت اطلاعات');
