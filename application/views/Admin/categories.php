@@ -28,14 +28,8 @@
 					<label for="checkbox">همه</label>
 					<input type="checkbox" id='check_all'>
 				</th>
-				<th width="20%">
-					نام دسته<br>
-					<input type="text" class="form-control form-control-sm column-filter" placeholder="جستجو...">
-				</th>
-				<th width="15%">
-					دسته والد<br>
-					<input type="text" class="form-control form-control-sm column-filter" placeholder="جستجو...">
-				</th>
+				<th width="20%">نام دسته</th>
+				<th width="15%">دسته والد</th>
 				<th width="15%">توضیحات</th>
 				<th width="8%">تعداد محصولات</th>
 				<th width="10%">وضعیت</th>
@@ -75,6 +69,7 @@
 						<select id="cf_parent" class="form-control">
 							<option value="0">— سطح اول —</option>
 						</select>
+						<input type="hidden" id="cf_parent_hidden">
 					</div>
 
 					<div class="form-group">
@@ -132,13 +127,7 @@
 			],
 		});
 
-		$('.column-filter').on('keyup change', function () {
-			var columnIndex = $(this).closest('th').index();
-			dataTable.column(columnIndex).search(this.value).draw();
-		});
-		$('.column-filter').on('click', function (e) {
-			e.stopPropagation();
-		});
+
 	});
 
 	function showSnackbar(type) {
@@ -167,7 +156,7 @@
 	}
 
 	// ✅ پر کردن select دسته والد (با حذف خود دسته و زیرمجموعه‌هاش موقع ویرایش)
-	function loadParentOptions(excludeId, selectedId) {
+	function loadParentOptions(excludeId, selectedId, disabled) {
 		$.ajax({
 			url: "<?= base_url('admin/get_categories_for_select') ?>",
 			method: "POST",
@@ -183,6 +172,10 @@
 						select.append('<option value="' + opt.id + '" ' + selected + '>' + opt.label + '</option>');
 					});
 				}
+
+				// ✅ ست کردن hidden و disabled
+				select.prop('disabled', !!disabled);
+				$('#cf_parent_hidden').val(selectedId || '0');
 			}
 		});
 	}
@@ -196,7 +189,7 @@
 		$('#cf_name').val('');
 		$('#cf_details').val('');
 		$('#cf_name_err').text('');
-		loadParentOptions(null, null);
+		loadParentOptions(null, null, false);
 		$('#category_form_modal').modal();
 	});
 
@@ -214,7 +207,7 @@
 		$('#cf_name').val('');
 		$('#cf_details').val('');
 		$('#cf_name_err').text('');
-		loadParentOptions(null, parent_id);
+		loadParentOptions(null, parent_id, true); // ✅ قفل شده
 		$('#category_form_modal').modal();
 	});
 
@@ -239,7 +232,7 @@
 					$('#cf_name').val(res.data.name_cat);
 					$('#cf_details').val(res.data.details);
 					$('#cf_name_err').text('');
-					loadParentOptions(res.data.id, res.data.parentId);
+					loadParentOptions(res.data.id, res.data.parentId, false);
 					$('#category_form_modal').modal();
 				} else {
 					alert(res.message ?? 'خطا در دریافت اطلاعات');
@@ -255,7 +248,12 @@
 	$('#save_category_form').on('click', function(){
 		var id = $('#cf_id').val();
 		var name = $('#cf_name').val().trim();
-		var parentId = $('#cf_parent').val();
+
+		// ✅ اگه select disabled بود، از hidden بخون
+		var parentId = $('#cf_parent').prop('disabled')
+			? $('#cf_parent_hidden').val()
+			: $('#cf_parent').val();
+
 		var details = $('#cf_details').val().trim();
 
 		$('#cf_name_err').text('');

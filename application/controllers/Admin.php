@@ -1862,10 +1862,20 @@ class Admin extends CI_Controller
 	{
 		$this->check_permission(['view', 'full'], 'category');
 
+		// ✅ گرفتن همه دسته‌بندی‌ها
 		$all = $this->base_model->get_data(
 			'categories', '*', null, null, null, null, null, null,
 			['parentId' => 'ASC', 'name_cat' => 'ASC']
 		);
+
+		// ✅ گرفتن تعداد محصولات برای همه دسته‌ها (یه کوئری به‌جای N تا)
+		$products = $this->base_model->get_data('products', 'id_cat');
+		$product_count_map = [];
+		foreach ($products as $p) {
+			if ($p->id_cat) {
+				$product_count_map[$p->id_cat] = ($product_count_map[$p->id_cat] ?? 0) + 1;
+			}
+		}
 
 		// ✅ گروه‌بندی بر اساس parentId برای ساخت درخت
 		$by_parent = [];
@@ -1882,21 +1892,16 @@ class Admin extends CI_Controller
 			$id_to_name[(string)$row->id] = $row->name_cat;
 		}
 
+		$logged_user_id = $this->session->userdata('id');
 		$permissions_check = [
-			'delete' => $this->base_model->has_permission($this->session->userdata('id'), ['delete', 'full'], 'category'),
-			'edit'   => $this->base_model->has_permission($this->session->userdata('id'), ['edit', 'full'], 'category'),
+			'delete' => $this->base_model->has_permission($logged_user_id, ['delete', 'full'], 'category'),
+			'edit'   => $this->base_model->has_permission($logged_user_id, ['edit', 'full'], 'category'),
 		];
 
 		$data = [];
 		foreach ($flat as $item) {
 			$node  = $item['node'];
 			$depth = $item['depth'];
-
-			// ✅ تعداد محصولات این دسته (بر اساس هم‌آیدی بودن با category1/category2)
-			$product_count = $this->db
-				->where('id_cat1', $node->id)
-				->or_where('id_cat2', $node->id)
-				->count_all_results('products');
 
 			$sub_array = [];
 
@@ -1912,10 +1917,10 @@ class Admin extends CI_Controller
 				: '<span class="text-muted">— سطح اول —</span>';
 
 			// توضیحات
-			$sub_array[] = htmlspecialchars($node->details);
+			$sub_array[] = htmlspecialchars($node->details ?? '');
 
-			// تعداد محصولات
-			$sub_array[] = $product_count;
+			// ✅ تعداد محصولات از lookup map (بدون N+1)
+			$sub_array[] = $product_count_map[$node->id] ?? 0;
 
 			// وضعیت
 			$sub_array[] = ($node->isActive == 0)
@@ -2247,18 +2252,15 @@ class Admin extends CI_Controller
 
 		// ✅ بررسی اینکه هیچ‌کدوم محصول متصل نداشته باشن
 		foreach ($cats_before as $cat) {
-			$product_count = $this->db
-				->where('id_cat1', $cat->id)
-				->or_where('id_cat2', $cat->id)
-				->count_all_results('products');
-
-			if ($product_count > 0) {
+			$products = $this->base_model->get_data('products', 'id', ['id_cat' => $cat->id]);
+			if (count($products) > 0) {
 				echo json_encode([
 					'status' => 0,
-					'message' => 'دسته «' . $cat->name_cat . '» دارای ' . $product_count . ' محصول است. ابتدا محصولات را به دسته دیگری منتقل کنید.'
+					'message' => 'دسته «' . $cat->name_cat . '» دارای ' . count($products) . ' محصول است. ابتدا محصولات را به دسته دیگری منتقل کنید.'
 				]);
 				return;
 			}
+
 		}
 
 		$group_id = uniqid('grp_', true);
