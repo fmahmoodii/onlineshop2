@@ -1816,12 +1816,6 @@ class Admin extends CI_Controller
 	}
 
 
-
-
-
-
-
-
 	/**
 	 * ✅ نمایش صفحه مدیریت دسته‌بندی
 	 */
@@ -2290,6 +2284,349 @@ class Admin extends CI_Controller
 
 
 
+	/**
+	 * ✅ نمایش صفحه ورود محصول
+	 */
+	public function insert_product()
+	{
+		$logged_user_id = $this->session->userdata('id');
+		if (!$logged_user_id) {
+			redirect('admin/login_page');
+			return;
+		}
+
+		if (!$this->base_model->has_permission($logged_user_id, ['insert', 'full'], 'products')) {
+			$data['title'] = 'دسترسی غیرمجاز';
+			$this->load->view('admin/layout/header', $data);
+			$this->load->view('admin/layout/sidebar');
+			$this->load->view('admin/errors/no_permission');
+			return;
+		}
+
+		// ✅ کد یکتا برای این session ورود محصول
+		$data['code'] = uniqid('prd_', true);
+
+		$data['title']    = 'ورود محصول';
+		$data['categories'] = $this->base_model->get_data(
+			'categories', '*', ['isActive' => 1], null, null, null, null, null,
+			['parentId' => 'ASC', 'name_cat' => 'ASC']
+		);
+		$data['model']  = $this->base_model->get_data('model', '*');
+		$data['size']   = $this->base_model->get_data('size', '*');
+		$data['jens']   = $this->base_model->get_data('jens', '*');
+		$data['brand']  = $this->base_model->get_data('brand', '*');
+		$data['color']  = $this->base_model->get_data('color', '*');
+
+		$this->load->view('admin/layout/header', $data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/insert_product', $data);
+	}
+
+	/**
+	 * ✅ آپلود موقت عکس‌ها به پوشه temp/{code}/
+	 */
+	public function upload_img_temp()
+	{
+		$logged_user_id = $this->session->userdata('id');
+		if (!$logged_user_id) {
+			echo json_encode(['status' => 0, 'message' => 'session_expired']);
+			return;
+		}
+
+		$code = $this->input->post('code', TRUE);
+		if (empty($code)) {
+			echo json_encode(['status' => 0, 'message' => 'کد محصول نامعتبر است']);
+			return;
+		}
+
+		// ✅ پوشه temp برای این کد
+		$temp_path = FCPATH . 'uploads/temp/' . $code . '/';
+		if (!is_dir($temp_path)) {
+			mkdir($temp_path, 0755, true);
+		}
+
+		$files = $_FILES['files'];
+		$uploaded = [];
+		$allowed_ext = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+
+		for ($i = 0; $i < count($files['name']); $i++) {
+			$ext = strtolower(pathinfo($files['name'][$i], PATHINFO_EXTENSION));
+
+			if (!in_array($ext, $allowed_ext)) {
+				continue;
+			}
+
+			// ✅ حداکثر ۵ عکس در temp
+			$existing = glob($temp_path . '*');
+			if (count($existing) >= 5) {
+				echo json_encode(['status' => 0, 'message' => 'حداکثر ۵ عکس مجاز است']);
+				return;
+			}
+
+			$new_name = uniqid() . '.' . $ext;
+			$dest = $temp_path . $new_name;
+
+			if (move_uploaded_file($files['tmp_name'][$i], $dest)) {
+				$uploaded[] = [
+					'filename' => $new_name,
+					'url'      => base_url('uploads/temp/' . $code . '/' . $new_name)
+				];
+			}
+		}
+
+		echo json_encode(['status' => 1, 'files' => $uploaded]);
+	}
+
+	/**
+	 * ✅ حذف عکس موقت
+	 */
+	public function delete_img_temp()
+	{
+		$code     = $this->input->post('code', TRUE);
+		$filename = $this->input->post('filename', TRUE);
+
+		if (empty($code) || empty($filename)) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		// ✅ جلوگیری از path traversal
+		$filename = basename($filename);
+		$file_path = FCPATH . 'uploads/temp/' . $code . '/' . $filename;
+
+		if (file_exists($file_path)) {
+			unlink($file_path);
+			echo json_encode(['status' => 1]);
+		} else {
+			echo json_encode(['status' => 0, 'message' => 'فایل یافت نشد']);
+		}
+	}
+
+	/**
+	 * ✅ گرفتن نام attribute از ID (برای نمایش توی ردیف جدول - بدون N+1)
+	 */
+	public function get_attr_labels()
+	{
+		$logged_user_id = $this->session->userdata('id');
+		if (!$logged_user_id) {
+			echo json_encode(['status' => 0, 'message' => 'session_expired']);
+			return;
+		}
+
+		// ✅ همه lookup داده‌ها رو یکجا می‌گیریم
+		$model_map  = [];
+		$jens_map   = [];
+		$size_map   = [];
+		$brand_map  = [];
+		$color_map  = [];
+
+		foreach ($this->base_model->get_data('model', 'id, name') as $r) {
+			$model_map[$r->id] = $r->name;
+		}
+		foreach ($this->base_model->get_data('jens', 'id, name') as $r) {
+			$jens_map[$r->id] = $r->name;
+		}
+		foreach ($this->base_model->get_data('size', 'id, name') as $r) {
+			$size_map[$r->id] = $r->name;
+		}
+		foreach ($this->base_model->get_data('brand', 'id, name') as $r) {
+			$brand_map[$r->id] = $r->name;
+		}
+		foreach ($this->base_model->get_data('color', 'id, name, color_code') as $r) {
+			$color_map[$r->id] = ['name' => $r->name, 'code' => $r->color_code];
+		}
+
+		$post = $this->input->post(NULL, TRUE);
+
+		echo json_encode([
+			'status'    => 1,
+			'model'     => $model_map[$post['model']]  ?? '',
+			'jens'      => $jens_map[$post['jens']]    ?? '',
+			'size'      => $size_map[$post['size']]    ?? '',
+			'brand'     => $brand_map[$post['brand']]  ?? '',
+			'color_name'=> isset($color_map[$post['color']]) ? $color_map[$post['color']]['name'] : '',
+			'color_code'=> isset($color_map[$post['color']]) ? $color_map[$post['color']]['code'] : '',
+		]);
+	}
+
+	/**
+	 * ✅ ثبت نهایی محصول + attribute ها + انتقال عکس‌ها (همه توی یه transaction)
+	 */
+	public function insert_prd()
+	{
+		$logged_user_id = $this->session->userdata('id');
+		if (!$logged_user_id) {
+			echo json_encode(['status' => 0, 'message' => 'session_expired']);
+			return;
+		}
+
+		if (!$this->base_model->has_permission($logged_user_id, ['insert', 'full'], 'products')) {
+			echo json_encode(['status' => 0, 'message' => 'شما دسترسی ثبت محصول را ندارید']);
+			return;
+		}
+
+		$code    = $this->input->post('code', TRUE);
+		$id_cat  = $this->input->post('id_cat', TRUE);
+		$name    = $this->input->post('name', TRUE);
+		$text    = $this->input->post('text', TRUE);
+		$attrs   = $this->input->post('attributes', TRUE); // JSON
+
+		// ✅ validation پایه
+		if (empty($name)) {
+			echo json_encode(['status' => 0, 'message' => 'نام محصول الزامی است']);
+			return;
+		}
+
+		if (empty($attrs)) {
+			echo json_encode(['status' => 0, 'message' => 'حداقل یک ویژگی (قیمت) الزامی است']);
+			return;
+		}
+
+		$attrs_data = json_decode($attrs, true);
+
+		if (empty($attrs_data) || !is_array($attrs_data)) {
+			echo json_encode(['status' => 0, 'message' => 'داده ویژگی‌ها نامعتبر است']);
+			return;
+		}
+
+		// ✅ بررسی وجود حداقل یک ردیف default
+		$has_default = false;
+		foreach ($attrs_data as $attr) {
+			if (!empty($attr['default']) && $attr['default'] == '1') {
+				$has_default = true;
+				break;
+			}
+		}
+
+		if (!$has_default) {
+			echo json_encode(['status' => 0, 'message' => 'یک ردیف باید به عنوان پیش‌فرض انتخاب شود']);
+			return;
+		}
+
+		// ✅ بررسی وجود قیمت در همه ردیف‌ها
+		foreach ($attrs_data as $attr) {
+			if (empty($attr['price']) || $attr['price'] <= 0) {
+				echo json_encode(['status' => 0, 'message' => 'قیمت برای همه ردیف‌ها الزامی است']);
+				return;
+			}
+		}
+
+		$now = date('Y-m-d H:i:s');
+		$group_id = uniqid('grp_', true);
+
+		$this->db->trans_start();
+
+		try {
+			// 1️⃣ ثبت محصول اصلی
+			$product_data = [
+				'code'     => $code,
+				'id_cat'   => $id_cat ?: NULL,
+				'name'     => $name,
+				'text'     => $text,
+				'isActive' => 1,
+				'created'  => $now,
+				'modified' => $now
+			];
+			$product_id = $this->base_model->insert_data('products', $product_data);
+
+			if (!$product_id) {
+				throw new Exception('خطا در ثبت محصول');
+			}
+
+			// 2️⃣ ثبت attribute ها (batch)
+			$batch_attrs = [];
+			foreach ($attrs_data as $attr) {
+				$batch_attrs[] = [
+					'code_p'      => $code,
+					'model'       => $attr['model']       ?? NULL,
+					'jens'        => $attr['jens']        ?? NULL,
+					'size'        => $attr['size']        ?? NULL,
+					'brand'       => $attr['brand']       ?? NULL,
+					'color'       => $attr['color']       ?? NULL,
+					'buy_price'   => $attr['buy_price']   ?? 0,
+					'price'       => $attr['price'],
+					'off_percent' => $attr['off_percent'] ?? NULL,
+					'supply'      => $attr['supply']      ?? 0,
+					'isActive'    => $attr['isActive']    ?? 1,
+					'default'     => $attr['default']     ?? 0,
+					'created'     => $now,
+					'modified'    => $now
+				];
+			}
+			$this->base_model->insert_data('product_attributes', $batch_attrs, true);
+
+			// 3️⃣ انتقال عکس‌ها از temp به پوشه اصلی
+			$temp_path   = FCPATH . 'uploads/temp/' . $code . '/';
+			$final_path  = FCPATH . 'uploads/products/' . $product_id . '/';
+
+			if (is_dir($temp_path)) {
+				if (!is_dir($final_path)) {
+					mkdir($final_path, 0755, true);
+				}
+
+				$files = glob($temp_path . '*');
+				foreach ($files as $file) {
+					$filename = basename($file);
+					rename($file, $final_path . $filename);
+
+					// ✅ ثبت عکس توی دیتابیس
+					$this->base_model->insert_data('product_images', [
+						'product_id' => $product_id,
+						'code_p'     => $code,
+						'filename'   => $filename,
+						'created'    => $now
+					]);
+				}
+
+				// حذف پوشه temp
+				rmdir($temp_path);
+			}
+
+			$this->db->trans_complete();
+
+			if ($this->db->trans_status() === FALSE) {
+				throw new Exception('خطا در ذخیره‌سازی');
+			}
+
+			// ✅ لاگ
+			$this->base_model->add_log(
+				'products', $product_id, 'insert',
+				null, $product_data,
+				'ثبت محصول جدید: ' . $name,
+				$group_id, 'ورود محصول'
+			);
+
+			echo json_encode(['status' => 1, 'product_id' => $product_id]);
+
+		} catch (Exception $e) {
+			$this->db->trans_rollback();
+			log_message('error', 'Insert Product Error: ' . $e->getMessage());
+			echo json_encode(['status' => 0, 'message' => 'خطا در ثبت: ' . $e->getMessage()]);
+		}
+	}
+
+	/**
+	 * ✅ cleanup: حذف پوشه‌های temp قدیمی‌تر از ۲۴ ساعت
+	 * (می‌تونه از cron job صدا زده بشه)
+	 */
+	public function cleanup_temp()
+	{
+		$temp_base = FCPATH . 'uploads/temp/';
+		if (!is_dir($temp_base)) return;
+
+		$dirs = glob($temp_base . '*', GLOB_ONLYDIR);
+		$now  = time();
+
+		foreach ($dirs as $dir) {
+			// اگه بیشتر از ۲۴ ساعت از آخرین تغییر گذشته
+			if ($now - filemtime($dir) > 86400) {
+				array_map('unlink', glob($dir . '/*'));
+				rmdir($dir);
+			}
+		}
+
+		echo json_encode(['status' => 1, 'message' => 'cleanup انجام شد']);
+	}
 
 
 
@@ -2595,7 +2932,7 @@ class Admin extends CI_Controller
 	}
 
 
-	public function insert_product()
+	/*public function insert_product()
 	{
 		$data['title']='محصول گذاری';
 		$data['category_test']=$this->base_model->get_data('category_test','*');
@@ -2619,10 +2956,10 @@ class Admin extends CI_Controller
 		$this->load->view('admin/layout/header',$data);
 		$this->load->view('admin/layout/sidebar');
 		$this->load->view('admin/insert-product2');
-	}
+	}*/
 
 
-	public function insert_prd()
+	/*public function insert_prd()
 	{
 		if ($_POST) {
 			date_default_timezone_set("Asia/Tehran");
@@ -2636,7 +2973,9 @@ class Admin extends CI_Controller
 			$this->base_model->insert('products', $data);
 			echo 1;
 		}
-	}
+	}*/
+
+
 
 
 //size
