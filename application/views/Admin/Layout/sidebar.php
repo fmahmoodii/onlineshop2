@@ -35,8 +35,10 @@
             align-items: center;justify-content: center;background-color: #5e5e5e;
             border: 1px solid #4e4e4e;position: relative;left: 40px;">وبسایت</li>
 				<a href="<?php echo base_url()?>admin"><li id="dashboard" >داشبورد</li></a>
-<!--				<a href="--><?php //echo base_url()?><!--admin/category_test2"><li id="category3" >دسته بندی محصول-تستی3</li></a>-->
-				<a href="<?php echo base_url()?>admin1/categories"><li id="category3" >دسته بندی محصول-تستی3</li></a>
+				<a href="<?php echo base_url()?>admin/registered_users"><li id="registered_users" >لیست کاربران</li></a>
+				<a href="<?php echo base_url()?>admin/permissions"><li id="permissions" >دسترسی کاربران</li></a>
+				<a href="<?php echo base_url()?>admin/comments" id="a-comments"><li id="comments">نظرات کاربران</li></a>
+			<a href="<?php echo base_url()?>admin/products"><li id="products">محصولات</li></a>
 				<a href="<?php echo base_url()?>admin/categories"><li id="category" >دسته بندی محصول</li></a>
 				<a href="<?php echo base_url()?>admin/insert_product"><li id="insert_product" >محصول گذاری</li></a>
 				<ul id="list2" class="ul2">
@@ -47,13 +49,8 @@
 					<a href="<?php echo base_url()?>admin/color"><li>رنگ</li></a>
 				</ul>
 				<a href="<?php echo base_url()?>admin/off_code"><li id="off_code">کد تخفیف</li></a>
-				<a href="<?php echo base_url()?>admin/rules"><li id="rules" >قوانین و مقررات</li></a>
-				<a href="<?php echo base_url()?>admin/products"><li id="products">محصولات</li></a>
-				<a href="<?php echo base_url()?>admin/footer"><li id="footer" >فوتر</li></a>
 				<a href="<?php echo base_url()?>admin/sales"><li id="sales" >اطلاعات فروش</li></a>
-				<a href="<?php echo base_url()?>admin/comments" id="a-comments"><li id="comments">نظرات کاربران</li></a>
-				<a href="<?php echo base_url()?>admin/registered_users"><li id="registered_users" >لیست کاربران</li></a>
-				<a href="<?php echo base_url()?>admin/permissions"><li id="permissions" >دسترسی کاربران</li></a>
+
 				<a href="<?php echo base_url()?>admin/inventory"><li id="inventory" style="width: 200px;height: 40px;display: flex;
             align-items: center;justify-content: center;
             border: 1px solid #4e4e4e;position: relative;left: 40px;">انبارداری</li></a>
@@ -62,6 +59,8 @@
 					<a href="<?php echo base_url()?>admin/inventory"><li>لیست انبار</li></a>
 					<a href="<?php echo base_url()?>admin/attributes"><li>لیست موجودی</li></a>
 				</ul>
+				<a href="<?php echo base_url()?>admin/rules"><li id="rules" >قوانین و مقررات</li></a>
+				<a href="<?php echo base_url()?>admin/footer"><li id="footer" >فوتر</li></a>
 			</ul>
 			<script>
 				$('#list a li').mouseover(function () {
