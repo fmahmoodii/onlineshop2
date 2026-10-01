@@ -1,171 +1,206 @@
-<style>/* The snackbar - position it at the bottom and in the middle of the screen */
-	#snackbar ,#snackbar2 {
-		visibility: hidden; /* Hidden by default. Visible on click */
-		min-width: 250px; /* Set a default minimum width */
-		margin-left: -125px; /* Divide value of min-width by 2 */
-		background-color: #333; /* Black background color */
-		color: #fff; /* White text color */
-		text-align: center; /* Centered text */
-		border-radius: 2px; /* Rounded borders */
-		padding: 16px; /* Padding */
-		position: fixed; /* Sit on top of the screen */
-		z-index: 1; /* Add a z-index if needed */
-		left: 50%; /* Center the snackbar */
-		bottom: 30px; /* 30px from the bottom */
+<?php defined('BASEPATH') OR exit('No direct script access allowed'); ?>
+
+<style>
+	/* Snackbar - یک کلاس */
+	.snackbar {
+		visibility: hidden;
+		min-width: 250px;
+		background-color: #333;
+		color: #fff;
+		text-align: center;
+		border-radius: 4px;
+		padding: 16px;
+		position: fixed;
+		z-index: 5000;
+		left: 50%;
+		bottom: 30px;
+		transform: translateX(-50%);
 	}
 
-	/* Show the snackbar when clicking on a button (class added with JavaScript) */
-	#snackbar.show ,#snackbar2.show {
-		visibility: visible; /* Show the snackbar */
-		/* Add animation: Take 0.5 seconds to fade in and out the snackbar.
-		However, delay the fade out process for 2.5 seconds */
-		-webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+	.snackbar.show {
+		visibility: visible;
 		animation: fadein 0.5s, fadeout 0.5s 2.5s;
 	}
 
-	/* Animations to fade the snackbar in and out */
-	@-webkit-keyframes fadein {
-		from {bottom: 0; opacity: 0;}
-		to {bottom: 30px; opacity: 1;}
-	}
-
 	@keyframes fadein {
-		from {bottom: 0; opacity: 0;}
-		to {bottom: 30px; opacity: 1;}
-	}
-
-	@-webkit-keyframes fadeout {
-		from {bottom: 30px; opacity: 1;}
-		to {bottom: 0; opacity: 0;}
+		from {
+			opacity: 0;
+			transform: translateX(-50%) translateY(20px);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(-50%) translateY(0);
+		}
 	}
 
 	@keyframes fadeout {
-		from {bottom: 30px; opacity: 1;}
-		to {bottom: 0; opacity: 0;}
+		from {
+			opacity: 1;
+		}
+		to {
+			opacity: 0;
+		}
 	}
 
-	#loading-image{
+	/* Loading Overlay */
+	.loading-overlay {
+		display: none;
 		position: fixed;
-		left: 0px;
-		top: 0px;
+		top: 0;
+		left: 0;
 		width: 100%;
 		height: 100%;
-		z-index: 9999;
-		background: url("<?php echo base_url()?>assets/images/loading-gif.gif") 50% 50% no-repeat rgb(15 10 10 /59%);
+		background: rgba(15, 10, 10, 0.59);
+		z-index: 4999;
+		justify-content: center;
+		align-items: center;
+	}
+
+	.loading-overlay.active {
+		display: flex;
+	}
+
+	/* CSS Spinner */
+	.spinner {
+		border: 4px solid rgba(255, 255, 255, 0.3);
+		border-top: 4px solid #fff;
+		border-radius: 50%;
+		width: 40px;
+		height: 40px;
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		0% { transform: rotate(0deg); }
+		100% { transform: rotate(360deg); }
+	}
+
+	.content-spacing {
+		margin-top: 1.5rem;
+		margin-bottom: 1.5rem;
 	}
 </style>
 
-<?php if($this->session->userdata('id')){ ?>
+<?php if ($this->session->userdata('id')): ?>
 
-	<div class="container box" id="content" style="padding: 0 0 100px 0">
-		<div id="loading-image" style="display: none"></div>
-		<div>
-			<button id='delete_selected' class="btn btn-sm ml-3 btn-danger" >حذف همه</button>
-			<button id='update_selected' class="btn btn-sm ml-3 btn-warning" >ویرایش همه</button>
-			<button id='active_selected' class="btn btn-sm ml-3 btn-primary" >فعال سازی همه</button>
-			<button id='deactive_selected' class="btn btn-sm ml-3 btn-secondry" >غیرفعال سازی همه</button>
+	<div class="container box" id="content">
+		<div id="loading-overlay" class="loading-overlay">
+			<div class="spinner"></div>
 		</div>
 
-		<br>
-		<br>
-			<table id="prd_data" class="table table-bordered table-striped" style="width: 100%">
-				<thead>
-				<tr id="id_p">
-<!--					<th width="5%">icon</th>-->
-					<th>
-						<label for="checkbox">همه</label>
-						<input type="checkbox" id='check_all'>
-					</th>
-					<th> نام کالا</th>
-					<th>قیمت</th>
-					<th>دسته اول</th>
-					<th>دسته دوم</th>
-					<th>تاریخ ایجاد</th>
-					<th>آخرین ویرایش</th>
-					<th>عملیات</th>
-					<th>کپی</th>
-					<th>ویرایش</th>
-					<th>حذف</th>
-				</tr>
-				</thead>
-			</table>
+		<!-- Toolbar -->
+		<div class="mb-3">
+			<?php if ($action_permissions['add']): ?>
+				<a href="<?php echo base_url('admin/insert_product'); ?>" class="btn btn-sm btn-success">
+					<i class="fa fa-plus"></i> ورود محصول جدید
+				</a>
+			<?php endif; ?>
 
-		<div id="snackbar">حذف شد</div>
-		<div id="snackbar2">انجام شد</div>
+			<?php if ($action_permissions['edit']): ?>
+				<button id="active_selected" class="btn btn-sm btn-primary">
+					<i class="fa fa-check"></i> فعال‌سازی همه
+				</button>
+				<button id="deactive_selected" class="btn btn-sm btn-secondary">
+					<i class="fa fa-times"></i> غیرفعال‌سازی همه
+				</button>
+				<button id="update_selected" class="btn btn-sm btn-warning">
+					<i class="fa fa-edit"></i> ویرایش همه
+				</button>
+			<?php endif; ?>
 
-	<div class="modal fade" id="show_edit" role="dialog">
-		<div class="modal-dialog modal-md">
-			<!-- Modal content-->
-			<div class="modal-content " style="background-color: #fff">
-				<div class="modal-header text-center">
-					<button style="float: right;" type="button" class="close" data-dismiss="modal"><i
-								class="fa fa-close"></i></button>
-					<h4 class="modal-title">ویرایش</h4>
-				</div>
-				<div class="modal-body">
-					<div>
-						<input autocomplete="off" type="hidden" id="id_modal">
+			<?php if ($action_permissions['delete']): ?>
+				<button id="delete_selected" class="btn btn-sm btn-danger">
+					<i class="fa fa-trash"></i> حذف همه
+				</button>
+			<?php endif; ?>
+		</div>
 
-						<label>دسته اول:</label>
-						<br>
-						<select class="form-control" id="cat1_show">
-							<option value="">انتخاب کنید</option>
-							<option value="">خالی</option>
-							<?php foreach ($category1 as $cat1){ ?>
-								<option id="cat1_option_1" value="<?php echo $cat1->id;?>"><?php echo $cat1->name_cat1?></option>
-							<?php }?>
+		<div id="msg"></div>
 
-						</select>
-						<br>
+		<div class="content-spacing"></div>
 
-						<label>دسته دوم:</label>
-						<br>
-						<select class="form-control" id="cat2_show">
-							<option value="">انتخاب کنید</option>
-							<option value="">خالی</option>
-						</select>
-						<br>
+		<!-- DataTable -->
+		<table id="prd_data" class="table table-bordered table-striped" style="width: 100%">
+			<thead>
+			<tr>
+				<th width="5%">
+					<label for="check_all">همه</label>
+					<input type="checkbox" id="check_all">
+				</th>
+				<th>نام کالا</th>
+				<th>قیمت</th>
+				<th>دسته‌بندی</th>
+				<th>تاریخ ایجاد</th>
+				<th>آخرین ویرایش</th>
+				<th>وضعیت</th>
+				<th>کپی</th>
+				<th>ویرایش</th>
+				<th>حذف</th>
+			</tr>
+			</thead>
+		</table>
 
+		<!-- Snackbars -->
+		<div id="snackbar" class="snackbar">محصول حذف شد</div>
+		<div id="snackbar2" class="snackbar">عملیات انجام شد</div>
 
-						<label>نام محصول:</label>
-						<input autocomplete="off" id="name" type="text" class="form-control" placeholder="نام محصول">
-						<br>
-
-						<label>توضیحات:</label>
-						<textarea id="text1" class="ckeditor" rows="30" cols="70" name="text1"></textarea>
-						<br>
-
-
+		<!-- Modal -->
+		<div class="modal fade" id="show_edit" role="dialog">
+			<div class="modal-dialog modal-lg">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h4 class="modal-title">ویرایش محصولات انتخاب‌شده</h4>
+						<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
 					</div>
-
-				</div>
-				<div class="modal-footer">
-					<button style="float: right;" id="btn_edit" class="btn btn-success" data-dismiss="modal">ثبت
-						ویرایش
-					</button>
-					<button style="float: right;" class="btn btn-danger" data-dismiss="modal">لغو</button>
-
+					<div class="modal-body">
+						<div class="form-group mb-3">
+							<label for="name">نام محصول:</label>
+							<input id="name" type="text" class="form-control" placeholder="نام محصول">
+						</div>
+						<div class="form-group">
+							<label for="text1">توضیحات:</label>
+							<textarea id="text1" class="ckeditor" rows="10" name="text1"></textarea>
+						</div>
+					</div>
+					<div class="modal-footer">
+						<button id="btn_edit" class="btn btn-success">ثبت ویرایش</button>
+						<button class="btn btn-secondary" data-bs-dismiss="modal">لغو</button>
+					</div>
 				</div>
 			</div>
 		</div>
 	</div>
 
-	</div>
-
-<?php }?>
+<?php endif; ?>
 
 
-<script type="text/javascript" language="javascript" >
 
-	$(document).ready(function(){
 
+<script type="text/javascript">
+	$(document).ready(function() {
+		var permissions = {
+			edit: <?php echo $action_permissions['edit'] ? 'true' : 'false'; ?>,
+			delete: <?php echo $action_permissions['delete'] ? 'true' : 'false'; ?>,
+			add: <?php echo $action_permissions['add'] ? 'true' : 'false'; ?>
+		};
+
+		// Initialize DataTable
 		var dataTable = $('#prd_data').DataTable({
+			processing: true,
+			serverSide: true,
+			order: [],
+			ajax: {
+				url: "<?php echo base_url('admin/products_list'); ?>",
+				type: "POST"
+			},
+			columnDefs: [{ targets: [0, 6, 7, 8, 9], orderable: false, searchable: false }],
+
 			language: {
 				lengthMenu: "نمایش _MENU_ رکورد هر صفحه",
 				zeroRecords: "متاسفانه موردی یافت نشد",
 				info: "صفحه _PAGE_ از _PAGES_",
 				infoEmpty: "موردی یافت نشد",
-				infoFiltered: "(فیلتر _TOTAL_ رکورد)",
+				infoFiltered: "(فیلتر _MAX_ رکورد)",
 				search: "جستجو ",
 				loadingRecords: "درحال بارگذاری",
 				processing: "در حال پردازش",
@@ -174,419 +209,221 @@
 					last: "انتها",
 					next: "بعدی",
 					previous: "قبلی"
-				},
-				aria: {
-					sortAscending: ": حالت صعودی فعال",
-					sortDescending: ": حالت نزولی فعال"
 				}
-			},
-			"processing":true,
-			"serverSide":true,
-			"order":[],
-			"ajax":{
-				url:"<?php echo base_url() . 'admin/products_list'; ?>",
-				type:"POST"
-			},
-			"columnDefs":[
-				{
-					"targets":[0, 8, 9, 10],
-					"orderable":false,
-				},
-			],
-		});
-
-
-
-
-	});
-
-	$(document).on('click', '#active', function (e) {
-		$("#loading-image").show();
-		var id = $(this).attr("id_p");
-		var table = 'products';
-		$.post('<?php echo base_url()?>admin/row_active', {
-				'id': id,
-				'table': table,
-			},
-			function (data) {
-				if (data == 1) {
-					$('#prd_data').DataTable().ajax.reload( null, false );
-					$("#loading-image").hide();
-				}
-			});
-	});
-	$(document).on('click', '#deactive', function (e) {
-		$("#loading-image").show();
-		var id = $(this).attr("id_p");
-		var table = 'products';
-		$.post('<?php echo base_url()?>admin/row_deactive', {
-				'id': id,
-				'table': table,
-			},
-			function (data) {
-				if (data == 1) {
-					$('#prd_data').DataTable().ajax.reload( null, false );
-					$("#loading-image").hide();
-				}
-			});
-	});
-
-	$(document).on('click', '#active_selected', function (e) {
-		$("#loading-image").show();
-		var table = 'products';
-		var ids = '';
-		var comma = '';
-		$("input:checkbox[name='row-check']:checked").each(function() {
-			ids = ids + comma + this.value;
-			comma = ',';
-		});
-
-		if(ids.length > 0) {
-			$.ajax({
-				type: "POST",
-				url:"<?php echo base_url(); ?>admin/rows_active",
-				data: {
-					'id': ids,
-					'table': table,
-				},
-				dataType: "html",
-				cache: false,
-				success: function(msg) {
-					$("#loading-image").hide();
-					$("#msg").html(msg);
-					$('#prd_data').DataTable().ajax.reload( null, false );
-					// Get the snackbar DIV
-					var x = document.getElementById("snackbar2");
-
-					// Add the "show" class to DIV
-					x.className = "show";
-
-					// After 3 seconds, remove the show class from DIV
-					setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
-				},
-				error: function(jqXHR, textStatus, errorThrown) {
-					$("#msg").html("<span style='color:red;'>" + textStatus + " " + errorThrown + "</span>");
-				}
-			});
-		} else {
-			$("#loading-image").hide();
-			$("#msg").html('<span style="color:red;">You must select at least one row for deletion</span>');
-		}
-
-	});
-	$(document).on('click', '#deactive_selected', function (e) {
-		$("#loading-image").show();
-		var table = 'products';
-		var ids = '';
-		var comma = '';
-		$("input:checkbox[name='row-check']:checked").each(function() {
-			ids = ids + comma + this.value;
-			comma = ',';
-		});
-
-		if(ids.length > 0) {
-			$.ajax({
-				type: "POST",
-				url:"<?php echo base_url(); ?>admin/rows_deactive",
-				data: {
-					'id': ids,
-					'table': table,
-				},
-				dataType: "html",
-				cache: false,
-				success: function(msg) {
-					$("#loading-image").hide();
-					$("#msg").html(msg);
-					$('#prd_data').DataTable().ajax.reload( null, false );
-					// Get the snackbar DIV
-					var x = document.getElementById("snackbar2");
-
-					// Add the "show" class to DIV
-					x.className = "show";
-
-					// After 3 seconds, remove the show class from DIV
-					setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
-				},
-				error: function(jqXHR, textStatus, errorThrown) {
-					$("#msg").html("<span style='color:red;'>" + textStatus + " " + errorThrown + "</span>");
-				}
-			});
-		} else {
-			$("#loading-image").hide();
-			$("#msg").html('<span style="color:red;">You must select at least one row for deletion</span>');
-		}
-
-	});
-
-
-	$(document).on('click', '#copy', function (e) {
-		$("#loading-image").show();
-		var code = $(this).attr("code_p");
-		var id = $(this).attr("id_p");
-
-
-		$.post('<?php echo base_url()?>admin/copy_product', {
-				'code': code,
-				'id': id,
-			},
-			function (data) {
-			if(data==1){
-				$("#loading-image").hide();
-				$('#prd_data').DataTable().ajax.reload( null, false );}
-			else {
-				$("#loading-image").hide();
-				alert('کپی انجام نشد..')
 			}
 		});
-	});
 
-	$(document).on('click', '#delete', function(){
-
-		var id_p = $(this).attr("id_p");
-		var code_p = $(this).attr("code_p");
-
-		var id = $(this).attr("id_p");
-		var column = 'id_p';
-		var table = 'shopping_cart_order';
-			$.ajax({
-				url:"<?php echo base_url(); ?>admin/check_orders",
-				method:"POST",
-				data:{
-					id:id,
-					column:column,
-					table:table,
-				},
-				success:function(data)
-				{
-					if(data==0) {
-						var m = confirm('آیا از حذف محصول اطمینان دارید؟');
-						// $("#loading-image").show();
-						if (m == true) {
-							$.ajax({
-								url:"<?php echo base_url(); ?>admin/delete_prd",
-								method:"POST",
-								data:{id_p:id_p, code_p:code_p},
-								success:function(data)
-								{
-									$("#loading-image").hide();
-									$('#prd_data').DataTable().ajax.reload( null, false );
-
-									// Get the snackbar DIV
-									var x = document.getElementById("snackbar");
-
-									// Add the "show" class to DIV
-									x.className = "show";
-
-									// After 3 seconds, remove the show class from DIV
-									setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
-
-
-								}
-							});
-
-						}else
-						{
-							$("#loading-image").hide();
-							return false;
-						}
-					}
-					else if(data == 1){
-						$("#loading-image").hide();
-						alert('امکان حذف این محصول وجود ندارد');
-					}
-
-
-				}
-			});
-
-	});
-
-
-	//If check_all checked then check all table rows
-	$("#check_all").on("click", function () {
+		// Check All / Uncheck All
+		$("#check_all").on("click", function() {
 			if ($("input:checkbox").prop("checked")) {
 				$("input:checkbox[name='row-check']").prop("checked", true);
-
 			} else {
 				$("input:checkbox[name='row-check']").prop("checked", false);
-
 			}
 		});
 
-	// Check each table row checkbox
-	$("input:checkbox[name='row-check']").on("change", function () {
-			var total_check_boxes = $("input:checkbox[name='row-check']").length;
-			var total_checked_boxes = $("input:checkbox[name='row-check']:checked").length;
-
-			// If all checked manually then check check_all checkbox
-			if (total_check_boxes === total_checked_boxes) {
-				$("#check_all").prop("checked", true);
-			}
-			else {
-				$("#check_all").prop("checked", false);
-			}
+		$(document).on("change", "input:checkbox[name='row-check']", function() {
+			var total = $("input:checkbox[name='row-check']").length;
+			var checked = $("input:checkbox[name='row-check']:checked").length;
+			$("#check_all").prop("checked", total === checked);
 		});
 
-	$("#delete_selected").on("click", function () {
-		$("#loading-image").show();
-		var ids = '';
-		var codes = '';
-		var comma = '';
-		$("input:checkbox[name='row-check']:checked").each(function() {
-			ids = ids + comma + this.value;
-			codes = codes + comma + $(this).attr('code_p');
-			comma = ',';
-		});
-
-		if(ids.length > 0) {
+		function toggleStatus(ids, status) {
+			$("#loading-image").show();
 			$.ajax({
-				type: "POST",
-				url:"<?php echo base_url(); ?>admin/delete_products",
-				data: {'ids': ids, 'codes':codes},
-				dataType: "html",
-				cache: false,
-				success: function(msg) {
+				url: "<?php echo base_url('admin/toggle_product_status'); ?>",
+				method: "POST",
+				data: { 'prd_ids[]': ids, 'status': status },
+				dataType: 'json',
+				success: function(response) {
 					$("#loading-image").hide();
-					$("#msg").html(msg);
-					$('#prd_data').DataTable().ajax.reload( null, false );
-					// Get the snackbar DIV
-					var x = document.getElementById("snackbar");
-
-					// Add the "show" class to DIV
-					x.className = "show";
-
-					// After 3 seconds, remove the show class from DIV
-					setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
+					if (response.status == 1) {
+						dataTable.ajax.reload(null, false);
+						showSnackbar('snackbar2');
+					} else {
+						alert(response.message || 'خطا در تغییر وضعیت');
+					}
 				},
-				error: function(jqXHR, textStatus, errorThrown) {
-					$("#msg").html("<span style='color:red;'>" + textStatus + " " + errorThrown + "</span>");
+				error: function() {
+					$("#loading-image").hide();
+					alert('خطا در ارتباط با سرور');
 				}
 			});
-		} else {
-			$("#loading-image").hide();
-			$("#msg").html('<span style="color:red;">You must select at least one product for deletion</span>');
 		}
-	});
 
-	$("#update_selected").on("click", function () {
-		$("#loading-image").show();
-		var ids = '';
-		var comma = '';
-
-		$("input:checkbox[name='row-check']:checked").each(function() {
-			ids = ids + comma + this.value;
-			comma = ',';
+		// تکی
+		$(document).on('click', '#active, #deactive', function() {
+			if (!permissions.edit) { alert('شما دسترسی این عملیات را ندارید'); return; }
+			var status = $(this).attr('id') === 'active' ? 1 : 0;
+			toggleStatus([$(this).attr('id_p')], status);
 		});
 
-		if(ids.length > 0) {
-			$("#loading-image").hide();
+		// گروهی
+		$('#active_selected, #deactive_selected').on('click', function() {
+			if (!permissions.edit) { alert('شما دسترسی این عملیات را ندارید'); return; }
+			var ids = getSelectedIds();
+			if (ids.length === 0) { alert('هیچ ردیفی انتخاب نشده است'); return; }
+			var status = $(this).attr('id') === 'active_selected' ? 1 : 0;
+			toggleStatus(ids, status);
+		});
+
+		// کپی محصول
+		$(document).on('click', '#copy', function() {
+			if (!permissions.add) {
+				alert('شما دسترسی این عملیات را ندارید');
+				return;
+			}
+
+			$("#loading-image").show();
+			var code = $(this).attr("code_p");
+			var id = $(this).attr("id_p");
+
+			$.post('<?php echo base_url()?>admin/copy_product', {
+				'code': code,
+				'id': id
+			}, function(data) {
+				$("#loading-image").hide();
+				if (data == 1) {
+					dataTable.ajax.reload(null, false);
+				} else {
+					alert('خطا در کپی');
+				}
+			});
+		});
+
+		function doDelete(id_p, code_p, confirmed) {
+			$("#loading-image").show();
+			$.ajax({
+				url: "<?php echo base_url(); ?>admin/delete_prd",
+				method: "POST",
+				data: { id_p: id_p, code_p: code_p, confirmed: confirmed ? 1 : 0 },
+				dataType: 'json',
+				success: function(response) {
+					$("#loading-image").hide();
+					if (response.status == 1) {
+						dataTable.ajax.reload(null, false);
+						showSnackbar('snackbar');
+					} else if (response.needs_confirm) {
+						if (confirm(response.message)) {
+							doDelete(id_p, code_p, true);
+						}
+					} else {
+						alert(response.message || 'خطا در حذف');
+					}
+				},
+				error: function() {
+					$("#loading-image").hide();
+					alert('خطا در ارتباط با سرور');
+				}
+			});
+		}
+
+		function deleteMultiple(ids, codes) {
+			$("#loading-image").show();
+			$.ajax({
+				url: "<?php echo base_url(); ?>admin/delete_products",
+				method: "POST",
+				data: { ids: ids.join(','), codes: codes.join(',') },
+				dataType: 'json',
+				success: function(response) {
+					$("#loading-image").hide();
+					if (response.status == 1) {
+						dataTable.ajax.reload(null, false);
+						showSnackbar('snackbar');
+					} else {
+						alert(response.message || 'خطا در حذف');
+					}
+				},
+				error: function() {
+					$("#loading-image").hide();
+					alert('خطا در ارتباط با سرور');
+				}
+			});
+		}
+
+// تکی
+		$(document).on('click', '#delete', function() {
+			if (!permissions.delete) { alert('شما دسترسی حذف را ندارید'); return; }
+			if (!confirm('آیا از حذف محصول اطمینان دارید؟')) return;
+			doDelete($(this).attr('id_p'), $(this).attr('code_p'), false);
+		});
+
+// گروهی
+		$('#delete_selected').on('click', function() {
+			if (!permissions.delete) { alert('شما دسترسی حذف را ندارید'); return; }
+			var ids = getSelectedIds();
+			var codes = getSelectedCodes();
+			if (ids.length === 0) { alert('هیچ ردیفی انتخاب نشده است'); return; }
+			if (!confirm('آیا از حذف محصولات انتخاب‌شده اطمینان دارید؟')) return;
+			deleteMultiple(ids, codes);
+		});
+
+		// ویرایش همگانی
+		$("#update_selected").on("click", function() {
+			if (!permissions.edit) {
+				alert('شما دسترسی این عملیات را ندارید');
+				return;
+			}
+
+			var ids = getSelectedIds();
+			if (ids.length === 0) {
+				alert('هیچ ردیفی انتخاب نشده است');
+				return;
+			}
+
 			$("#show_edit").modal();
-
-		} else {
-			$("#loading-image").hide();
-			$("#msg").html('<span style="color:red;">You must select at least one product for deletion</span>');
-		}
-	});
-
-	//---------عملیات ویرایش-----------
-	$(document).on('click', '#btn_edit', function (e) {
-		$("#loading-image").show();
-
-		var id_cat1=$("#cat1_show").val();
-		var id_cat2=$("#cat2_show").val();
-		var name=$("#name").val();
-		var text=CKEDITOR.instances['text1'].getData();
-
-		var ids = '';
-		var comma = '';
-
-
-
-		$("input:checkbox[name='row-check']:checked").each(function() {
-			ids = ids + comma + this.value;
-			comma = ',';
 		});
 
-		if(ids.length > 0) {
+		// ثبت ویرایش همگانی
+		$(document).on('click', '#btn_edit', function() {
+			$("#loading-image").show();
 
-			// var m = confirm('آیا از ویرایش محصول اطمینان دارید؟');
-			// if (m == true) {
+			var ids = getSelectedIds();
+			var name = $("#name").val();
+			var text = CKEDITOR.instances['text1'].getData();
 
 			$.post('<?php echo base_url()?>admin/update_products_checkall', {
-					'id': ids, 'id_cat1': id_cat1, 'id_cat2': id_cat2,
-					'name': name, 'text': text
-				},
-				function (data) {
-					if (data.includes(1)) {
-						$("#loading-image").hide();
-						$("#cat1_show").val('');
-						$("#cat2_show").val('');
-						$("#name").val('');
-						CKEDITOR.instances['text1'].setData('');
-						alert('ویرایش محصول انجام شد');
-						$('#prd_data').DataTable().ajax.reload( null, false );
-					}
+				'id': ids.join(','),
+				'name': name,
+				'text': text
+			}, function(data) {
+				if (data.includes(1)) {
 					$("#loading-image").hide();
-				});
+					$("#name").val('');
+					CKEDITOR.instances['text1'].setData('');
+					$("#show_edit").modal('hide');
+					dataTable.ajax.reload(null, false);
+					showSnackbar('snackbar2');
+				}
+				$("#loading-image").hide();
+			});
+		});
 
-			// }
-			// if (m == false) {
-			// 	return
-			// }
 
+
+		// Helper Functions
+		function getSelectedIds() {
+			var ids = [];
+			$("input:checkbox[name='row-check']:checked").each(function() {
+				ids.push($(this).attr('id_p'));
+			});
+			return ids;
 		}
 
-	});
-
-	//---------get_category-----------
-	$('#cat1_show').change(function(){
-		id_cat1=$(this).val();
-		$.post('<?php echo base_url();?>admin/get_category2',{'id_cat1':id_cat1},
-			function(data){
-				$('#cat2_show').html(data);
+		function getSelectedCodes() {
+			var codes = [];
+			$("input:checkbox[name='row-check']:checked").each(function() {
+				codes.push($(this).attr('code_p'));
 			});
+			return codes;
+		}
+
+		function showSnackbar(id) {
+			var x = document.getElementById(id);
+			x.className = "show";
+			setTimeout(function() {
+				x.className = x.className.replace("show", "");
+			}, 3000);
+		}
 	});
-
-
-
-
-		//$("#delete_selected").on("click", function () {
-		//	var ids = '';
-		//	var comma = '';
-		//	$("input:checkbox[name='row-check']:checked").each(function() {
-		//		ids = ids + comma + this.value;
-		//		comma = ',';
-		//	});
-		//
-		//	if(ids.length > 0) {
-		//		$.ajax({
-		//			type: "POST",
-		//			url:"<?php //echo base_url(); ?>//admin/delete_products",
-		//			data: {'ids': ids},
-		//			dataType: "html",
-		//			cache: false,
-		//			success: function(msg) {
-		//				$("#msg").html(msg);
-		//				$('#prd_data').DataTable().ajax.reload();
-		//				// Get the snackbar DIV
-		//				var x = document.getElementById("snackbar");
-		//
-		//				// Add the "show" class to DIV
-		//				x.className = "show";
-		//
-		//				// After 3 seconds, remove the show class from DIV
-		//				setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
-		//			},
-		//			error: function(jqXHR, textStatus, errorThrown) {
-		//				$("#msg").html("<span style='color:red;'>" + textStatus + " " + errorThrown + "</span>");
-		//			}
-		//		});
-		//	} else {
-		//		$("#msg").html('<span style="color:red;">You must select at least one product for deletion</span>');
-		//	}
-		//});
-
-
-
-
 </script>

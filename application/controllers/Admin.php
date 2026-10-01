@@ -2280,10 +2280,6 @@ class Admin extends CI_Controller
 
 
 
-
-
-
-
 	/**
 	 * ✅ نمایش صفحه ورود محصول
 	 */
@@ -2631,12 +2627,1414 @@ class Admin extends CI_Controller
 
 
 
+	/**
+	 * ✅ نمایش صفحه لیست محصولات
+	 */
+	public function products()
+	{
+		$logged_user_id = $this->session->userdata('id');
+		if (!$logged_user_id) {
+			redirect('admin/login_page');
+			return;
+		}
+
+		if (!$this->base_model->has_permission($logged_user_id, ['view', 'full'], 'products')) {
+			$data['title'] = 'دسترسی غیرمجاز';
+			$this->load->view('admin/layout/header', $data);
+			$this->load->view('admin/layout/sidebar');
+			$this->load->view('admin/errors/no_permission');
+			return;
+		}
+
+		$data['action_permissions'] = [
+			'add'    => $this->base_model->has_permission($logged_user_id, ['insert', 'full'], 'products'),
+			'edit'   => $this->base_model->has_permission($logged_user_id, ['edit', 'full'], 'products'),
+			'delete' => $this->base_model->has_permission($logged_user_id, ['delete', 'full'], 'products'),
+		];
+
+		$data['title'] = 'محصولات';
+		$this->load->view('admin/layout/header', $data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/products', $data);
+	}
+
+	/**
+	 * ✅ لیست محصولات برای DataTables (server-side)
+	 */
+	public function products_list()
+	{
+		$this->check_permission(['view', 'full'], 'products');
+
+		$post_data = $this->input->post(NULL, TRUE);
+
+		$columns = [
+			null,
+			'products.name',
+			'pa.price',
+			'categories.name_cat',
+			'products.created',
+			'products.modified',
+			null, null, null, null
+		];
+
+		$table  = 'products';
+		$select = '
+			products.id,
+			products.code,
+			products.name,
+			products.isActive,
+			products.created,
+			products.modified,
+			categories.name_cat,
+			pa.price
+		';
+
+		$join = [
+			'categories'        => 'categories.id = products.id_cat',
+			// ✅ join به attribute پیش‌فرض برای گرفتن قیمت
+			'product_attributes pa' => 'pa.code_p = products.code AND pa.`default` = 1'
+		];
+
+		$result = $this->base_model->datatable(
+			$table,
+			$columns,
+			$post_data,
+			$select,
+			$join,
+			null,
+			['products.id' => 'DESC']
+		);
+
+		$logged_user_id = $this->session->userdata('id');
+		$permissions_check = [
+			'edit'   => $this->base_model->has_permission($logged_user_id, ['edit', 'full'], 'products'),
+			'delete' => $this->base_model->has_permission($logged_user_id, ['delete', 'full'], 'products'),
+			'add'    => $this->base_model->has_permission($logged_user_id, ['insert','full'], 'products'),
+		];
+
+		$data = [];
+		foreach ($result['data'] as $row) {
+			$sub_array = [];
+
+			// Checkbox
+			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check" id_p="' . $row->id . '" code_p="' . htmlspecialchars($row->code) . '">';
+
+			// نام محصول
+			$sub_array[] = '<span style="display:inline-block;width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' . htmlspecialchars($row->name) . '">'
+				. htmlspecialchars($row->name) . '</span>';
+
+			// قیمت پیش‌فرض
+			$sub_array[] = '<span>' . number_format($row->price) . '</span>';
+
+			// دسته‌بندی
+			$sub_array[] = '<span style="display:inline-block;width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' . htmlspecialchars($row->name_cat ?? '') . '">'
+				. htmlspecialchars($row->name_cat ?? '—') . '</span>';
+
+			// تاریخ ایجاد
+			$sub_array[] = htmlspecialchars($row->created);
+
+			// آخرین ویرایش
+			$sub_array[] = htmlspecialchars($row->modified);
+
+			// وضعیت
+			$sub_array[] = ($row->isActive == 0)
+				? '<button type="button" id="active" id_p="' . $row->id . '" class="btn btn-primary btn-xs"
+					' . ($permissions_check['edit'] ? '' : 'data-no-permission="true"') . '>فعالسازی</button>'
+				: '<button type="button" id="deactive" id_p="' . $row->id . '" class="btn btn-secondary btn-xs"
+					' . ($permissions_check['edit'] ? '' : 'data-no-permission="true"') . '>غیرفعالسازی</button>';
+
+			// کپی
+			$sub_array[] = '<button type="button" id="copy" id_p="' . $row->id . '" code_p="' . htmlspecialchars($row->code) . '" class="btn btn-info btn-xs"
+				' . ($permissions_check['add'] ? '' : 'data-no-permission="true"') . '>
+				<i class="fa fa-copy"></i>
+			</button>';
+
+			// ویرایش
+			$sub_array[] = '<a href="' . base_url('admin/edit_product/' . $row->code) . '">
+				<button type="button" class="btn btn-warning btn-xs"
+					' . ($permissions_check['edit'] ? '' : 'data-no-permission="true"') . '>
+					<i class="fa fa-edit fa-lg"></i>
+				</button>
+			</a>';
+
+			// حذف
+			$sub_array[] = '<button type="button" id="delete" id_p="' . $row->id . '" code_p="' . htmlspecialchars($row->code) . '" class="btn btn-danger btn-xs"
+				' . ($permissions_check['delete'] ? '' : 'data-no-permission="true"') . '>
+				<i class="fa fa-trash fa-lg"></i>
+			</button>';
+
+			$data[] = $sub_array;
+		}
+
+		echo json_encode([
+			'draw'            => isset($post_data['draw']) ? intval($post_data['draw']) : 0,
+			'recordsTotal'    => $result['recordsTotal'],
+			'recordsFiltered' => $result['recordsFiltered'],
+			'data'            => $data
+		]);
+	}
+
+	/**
+	 * ✅ فعال/غیرفعال کردن محصول(ها)
+	 */
+	public function toggle_product_status()
+	{
+		$this->check_permission(['edit', 'full'], 'products');
+
+		$post_data = $this->input->post(NULL, TRUE);
+		$prd_ids   = isset($post_data['prd_ids']) ? (array)$post_data['prd_ids'] : [];
+		$status    = isset($post_data['status']) ? intval($post_data['status']) : 1;
+
+		if (empty($prd_ids)) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$products_before = $this->base_model->get_data('products', '*', null, null, ['id' => $prd_ids]);
+		if (empty($products_before)) {
+			echo json_encode(['status' => 0, 'message' => 'محصول مورد نظر یافت نشد']);
+			return;
+		}
+
+		$group_id = uniqid('grp_', true);
+
+		$this->db->trans_start();
+
+		$batch = [];
+		foreach ($products_before as $p) {
+			$batch[] = ['id' => $p->id, 'isActive' => $status];
+		}
+		$this->base_model->update_data('products', $batch, null, true, 'id');
+
+		$this->db->trans_complete();
+
+		if ($this->db->trans_status() === FALSE) {
+			echo json_encode(['status' => 0, 'message' => 'خطا در تغییر وضعیت']);
+			return;
+		}
+
+		foreach ($products_before as $p) {
+			$this->base_model->add_log(
+				'products', $p->id, 'update_status',
+				['isActive' => $p->isActive],
+				['isActive' => $status],
+				($status ? 'فعالسازی' : 'غیرفعالسازی') . ' محصول: ' . $p->name,
+				$group_id, 'تغییر وضعیت محصول'
+			);
+		}
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ چک کردن وجود محصول در سبد خرید
+	 */
+	public function check_orders()
+	{
+		$this->check_permission(['delete', 'full'], 'products');
+
+		$id_p = $this->input->post('id_p', TRUE);
+
+		if (!$id_p) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		// ✅ چک می‌کنیم آیا این محصول توی سبد خرید هست
+		$in_cart = $this->db
+			->where('id_p', $id_p)
+			->count_all_results('shopping_cart');
+
+		echo json_encode([
+			'status'   => 1,
+			'in_cart'  => $in_cart,
+		]);
+	}
+
+	/**
+	 * ✅ حذف نرم محصول (+ attribute ها + پاکسازی سبد خرید)
+	 */
+	public function delete_prd()
+	{
+		$this->check_permission(['delete', 'full'], 'products');
+
+		$id_p      = $this->input->post('id_p', TRUE);
+		$code_p    = $this->input->post('code_p', TRUE);
+		$confirmed = $this->input->post('confirmed', TRUE); // اگه ادمین اخطار رو تأیید کرده
+
+		if (!$id_p || !$code_p) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$product = $this->base_model->get_data('products', '*', ['id' => $id_p]);
+		if (empty($product)) {
+			echo json_encode(['status' => 0, 'message' => 'محصول یافت نشد']);
+			return;
+		}
+		$product = $product[0];
+
+		// ✅ چک سبد خرید
+		$in_cart = $this->db
+			->where('id_p', $id_p)
+			->count_all_results('shopping_cart');
+
+		// اگه توی سبد هست و ادمین هنوز تأیید نکرده، اخطار بده
+		if ($in_cart > 0 && !$confirmed) {
+			echo json_encode([
+				'status'   => 0,
+				'in_cart'  => $in_cart,
+				'needs_confirm' => true,
+				'message'  => 'این محصول در سبد خرید ' . $in_cart . ' کاربر وجود دارد. با حذف، این محصول از سبد خریدشان برداشته می‌شود. ادامه می‌دهید؟'
+			]);
+			return;
+		}
+
+		$group_id = uniqid('grp_', true);
+
+		$this->db->trans_start();
+
+		// ✅ حذف نرم محصول
+		$this->base_model->soft_delete('products', ['id' => $id_p]);
+
+		// ✅ حذف نرم attribute ها
+		$this->base_model->soft_delete('product_attributes', ['code_p' => $code_p]);
+
+		// ✅ حذف فیزیکی از سبد خرید (چون محصول دیگه وجود نداره)
+		if ($in_cart > 0) {
+			$this->base_model->delete_data('shopping_cart', ['id_p' => $id_p]);
+
+			// TODO: اطلاع‌رسانی به کاربران (پیامک/ایمیل/notification داخلی)
+			// در آینده اینجا پیاده‌سازی می‌شه
+		}
+
+		$this->db->trans_complete();
+
+		if ($this->db->trans_status() === FALSE) {
+			echo json_encode(['status' => 0, 'message' => 'خطا در حذف']);
+			return;
+		}
+
+		$this->base_model->add_log(
+			'products', $id_p, 'soft_delete',
+			(array)$product, null,
+			'حذف محصول: ' . $product->name . ($in_cart > 0 ? ' (از سبد ' . $in_cart . ' کاربر حذف شد)' : ''),
+			$group_id, 'حذف محصول'
+		);
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ حذف نرم چند محصول انتخاب‌شده
+	 */
+	public function delete_products()
+	{
+		$this->check_permission(['delete', 'full'], 'products');
+
+		$ids   = $this->input->post('ids', TRUE);
+		$codes = $this->input->post('codes', TRUE);
+
+		if (empty($ids) || empty($codes)) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$id_arr   = explode(',', $ids);
+		$code_arr = explode(',', $codes);
+
+		$products_before = $this->base_model->get_data('products', '*', null, null, ['id' => $id_arr]);
+		if (empty($products_before)) {
+			echo json_encode(['status' => 0, 'message' => 'محصولات یافت نشدند']);
+			return;
+		}
+
+		$group_id = uniqid('grp_', true);
+
+		$this->db->trans_start();
+
+		// ✅ حذف نرم محصولات
+		$this->base_model->soft_delete('products', $id_arr, true, 'id');
+
+		// ✅ حذف نرم attribute ها
+		$this->base_model->soft_delete('product_attributes', $code_arr, true, 'code_p');
+
+		$this->db->trans_complete();
+
+		if ($this->db->trans_status() === FALSE) {
+			echo json_encode(['status' => 0, 'message' => 'خطا در حذف']);
+			return;
+		}
+
+		foreach ($products_before as $p) {
+			$this->base_model->add_log(
+				'products', $p->id, 'soft_delete',
+				(array)$p, null,
+				'حذف محصول: ' . $p->name,
+				$group_id, 'حذف گروهی محصول'
+			);
+		}
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ کپی محصول (+ attribute ها + عکس‌ها)
+	 */
+	public function copy_product()
+	{
+		$this->check_permission(['insert', 'full'], 'products');
+
+		$id_p   = $this->input->post('id', TRUE);
+		$code_p = $this->input->post('code', TRUE);
+
+		if (!$id_p || !$code_p) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$product = $this->base_model->get_data('products', '*', ['id' => $id_p]);
+		if (empty($product)) {
+			echo json_encode(['status' => 0, 'message' => 'محصول یافت نشد']);
+			return;
+		}
+		$product = $product[0];
+
+		$attrs  = $this->base_model->get_data('product_attributes', '*', ['code_p' => $code_p]);
+		$images = $this->base_model->get_data('product_images', '*', ['product_id' => $id_p]);
+
+		$new_code = uniqid('prd_', true);
+		$now      = date('Y-m-d H:i:s');
+		$group_id = uniqid('grp_', true);
+
+		$this->db->trans_start();
+
+		// 1️⃣ کپی محصول اصلی
+		$new_product = [
+			'code'     => $new_code,
+			'id_cat'   => $product->id_cat,
+			'name'     => 'کپی - ' . $product->name,
+			'text'     => $product->text,
+			'isActive' => 0, // کپی غیرفعال ثبت میشه
+			'created'  => $now,
+			'modified' => $now
+		];
+		$new_product_id = $this->base_model->insert_data('products', $new_product);
+
+		if (!$new_product_id) {
+			$this->db->trans_rollback();
+			echo json_encode(['status' => 0, 'message' => 'خطا در کپی محصول']);
+			return;
+		}
+
+		// 2️⃣ کپی attribute ها
+		if (!empty($attrs)) {
+			$batch_attrs = [];
+			foreach ($attrs as $attr) {
+				$batch_attrs[] = [
+					'code_p'      => $new_code,
+					'model'       => $attr->model,
+					'jens'        => $attr->jens,
+					'size'        => $attr->size,
+					'brand'       => $attr->brand,
+					'color'       => $attr->color,
+					'buy_price'   => $attr->buy_price,
+					'price'       => $attr->price,
+					'off_percent' => $attr->off_percent,
+					'supply'      => $attr->supply,
+					'isActive'    => $attr->isActive,
+					'default'     => $attr->default,
+					'created'     => $now,
+					'modified'    => $now
+				];
+			}
+			$this->base_model->insert_data('product_attributes', $batch_attrs, true);
+		}
+
+		// 3️⃣ کپی عکس‌ها (فایل + دیتابیس)
+		$src_path  = FCPATH . 'uploads/products/' . $id_p . '/';
+		$dest_path = FCPATH . 'uploads/products/' . $new_product_id . '/';
+
+		if (is_dir($src_path) && !empty($images)) {
+			if (!is_dir($dest_path)) {
+				mkdir($dest_path, 0755, true);
+			}
+
+			$batch_images = [];
+			foreach ($images as $img) {
+				$src_file  = $src_path . $img->filename;
+				$dest_file = $dest_path . $img->filename;
+
+				if (file_exists($src_file)) {
+					copy($src_file, $dest_file);
+					$batch_images[] = [
+						'product_id' => $new_product_id,
+						'code_p'     => $new_code,
+						'filename'   => $img->filename,
+						'created'    => $now
+					];
+				}
+			}
+
+			if (!empty($batch_images)) {
+				$this->base_model->insert_data('product_images', $batch_images, true);
+			}
+		}
+
+		$this->db->trans_complete();
+
+		if ($this->db->trans_status() === FALSE) {
+			// پاکسازی پوشه کپی در صورت خطا
+			if (is_dir($dest_path)) {
+				array_map('unlink', glob($dest_path . '*'));
+				rmdir($dest_path);
+			}
+			echo json_encode(['status' => 0, 'message' => 'خطا در کپی']);
+			return;
+		}
+
+		$this->base_model->add_log(
+			'products', $new_product_id, 'copy',
+			null, $new_product,
+			'کپی از محصول: ' . $product->name,
+			$group_id, 'کپی محصول'
+		);
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ ویرایش همگانی (نام + توضیحات) برای چند محصول انتخاب‌شده
+	 */
+	public function update_products_checkall()
+	{
+		$this->check_permission(['edit', 'full'], 'products');
+
+		$ids  = $this->input->post('id', TRUE);
+		$name = $this->input->post('name', TRUE);
+		$text = $this->input->post('text', TRUE);
+
+		if (empty($ids)) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$id_arr = explode(',', $ids);
+		$now    = date('Y-m-d H:i:s');
+		$group_id = uniqid('grp_', true);
+
+		$update_data = ['modified' => $now];
+		if (!empty($name)) $update_data['name'] = $name;
+		if (!empty($text)) $update_data['text'] = $text;
+
+		if (count($update_data) === 1) {
+			// فقط modified — چیزی برای آپدیت نیست
+			echo json_encode(['status' => 0, 'message' => 'حداقل یک فیلد برای ویرایش وارد کنید']);
+			return;
+		}
+
+		$products_before = $this->base_model->get_data('products', '*', null, null, ['id' => $id_arr]);
+
+		$this->db->trans_start();
+
+		$batch = [];
+		foreach ($id_arr as $id) {
+			$row = array_merge(['id' => $id], $update_data);
+			$batch[] = $row;
+		}
+		$this->base_model->update_data('products', $batch, null, true, 'id');
+
+		$this->db->trans_complete();
+
+		if ($this->db->trans_status() === FALSE) {
+			echo json_encode(['status' => 0, 'message' => 'خطا در ویرایش']);
+			return;
+		}
+
+		foreach ($products_before as $p) {
+			$this->base_model->add_log(
+				'products', $p->id, 'update',
+				(array)$p, $update_data,
+				'ویرایش همگانی محصول: ' . $p->name,
+				$group_id, 'ویرایش همگانی محصول'
+			);
+		}
+
+		echo json_encode(['status' => 1]);
+	}
+
+
+
+
+	/**
+	 * ✅ نمایش صفحه ویرایش محصول
+	 */
+	public function edit_product($code = null)
+	{
+		$logged_user_id = $this->session->userdata('id');
+		if (!$logged_user_id) {
+			redirect('admin/login_page');
+			return;
+		}
+
+		if (!$this->base_model->has_permission($logged_user_id, ['edit', 'full'], 'products')) {
+			$data['title'] = 'دسترسی غیرمجاز';
+			$this->load->view('admin/layout/header', $data);
+			$this->load->view('admin/layout/sidebar');
+			$this->load->view('admin/errors/no_permission');
+			return;
+		}
+
+		if (!$code) {
+			redirect('admin/products');
+			return;
+		}
+
+		$product = $this->base_model->get_data('products', '*', ['code' => $code]);
+		if (empty($product)) {
+			redirect('admin/products');
+			return;
+		}
+
+		$data['title']      = 'ویرایش محصول';
+		$data['product']    = $product[0];
+		$data['categories'] = $this->base_model->get_data(
+			'categories', '*', ['isActive' => 1], null, null, null, null, null,
+			['parentId' => 'ASC', 'name_cat' => 'ASC']
+		);
+		$data['model']  = $this->base_model->get_data('model', '*');
+		$data['size']   = $this->base_model->get_data('size', '*');
+		$data['jens']   = $this->base_model->get_data('jens', '*');
+		$data['brand']  = $this->base_model->get_data('brand', '*');
+		$data['color']  = $this->base_model->get_data('color', '*');
+		$data['images'] = $this->base_model->get_data('product_images', '*', ['product_id' => $product[0]->id]);
+
+		$this->load->view('admin/layout/header', $data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/edit_product', $data);
+	}
+
+	/**
+	 * ✅ لیست attribute های یک محصول برای DataTable
+	 */
+	public function attr_list()
+	{
+		$this->check_permission(['edit', 'full'], 'products');
+
+		$post_data = $this->input->post(NULL, TRUE);
+		$code_p    = isset($post_data['code_p']) ? $post_data['code_p'] : null;
+
+		if (!$code_p) {
+			echo json_encode(['data' => []]);
+			return;
+		}
+
+		$columns = [
+			null,
+			'product_attributes.model',
+			'product_attributes.jens',
+			'product_attributes.size',
+			'product_attributes.brand',
+			'product_attributes.color',
+			'product_attributes.buy_price',
+			'product_attributes.price',
+			'product_attributes.off_percent',
+			'product_attributes.supply',
+			null,
+			null,
+			null
+		];
+
+		$result = $this->base_model->datatable(
+			'product_attributes',
+			$columns,
+			$post_data,
+			'product_attributes.*',
+			null,
+			['code_p' => $code_p]
+		);
+
+		// ✅ گرفتن lookup map ها یکجا (بدون N+1)
+		$model_map = $jens_map = $size_map = $brand_map = $color_map = [];
+		foreach ($this->base_model->get_data('model', 'id, name') as $r)  { $model_map[$r->id] = $r->name; }
+		foreach ($this->base_model->get_data('jens', 'id, name') as $r)   { $jens_map[$r->id]  = $r->name; }
+		foreach ($this->base_model->get_data('size', 'id, name') as $r)   { $size_map[$r->id]  = $r->name; }
+		foreach ($this->base_model->get_data('brand', 'id, name') as $r)  { $brand_map[$r->id] = $r->name; }
+		foreach ($this->base_model->get_data('color', 'id, name, color_code') as $r) {
+			$color_map[$r->id] = ['name' => $r->name, 'code' => $r->color_code];
+		}
+
+		$logged_user_id = $this->session->userdata('id');
+		$can_edit = $this->base_model->has_permission($logged_user_id, ['edit', 'full'], 'products');
+
+		$data = [];
+		foreach ($result['data'] as $row) {
+			$sub_array = [];
+
+			$sub_array[] = '<input type="checkbox" name="attr-check" attr_id="' . $row->id . '">';
+
+			$sub_array[] = htmlspecialchars($model_map[$row->model] ?? '—');
+			$sub_array[] = htmlspecialchars($jens_map[$row->jens]   ?? '—');
+			$sub_array[] = htmlspecialchars($size_map[$row->size]   ?? '—');
+			$sub_array[] = htmlspecialchars($brand_map[$row->brand] ?? '—');
+
+			// رنگ با دایره رنگی
+			if (isset($color_map[$row->color])) {
+				$sub_array[] = '<span style="height:14px;width:14px;border:1px solid #000;border-radius:50%;display:inline-block;background:' . $color_map[$row->color]['code'] . ';margin-left:4px;"></span>'
+					. htmlspecialchars($color_map[$row->color]['name']);
+			} else {
+				$sub_array[] = '—';
+			}
+
+			$sub_array[] = number_format($row->buy_price ?? 0);
+			$sub_array[] = number_format($row->price);
+			$sub_array[] = $row->off_percent ? $row->off_percent . '%' : '—';
+			$sub_array[] = $row->supply;
+
+			// isActive
+			$sub_array[] = ($row->isActive == 0)
+				? '<button type="button" class="btn btn-primary btn-xs toggle_attr_status" attr_id="' . $row->id . '" data-status="1"
+					' . ($can_edit ? '' : 'data-no-permission="true"') . '>فعالسازی</button>'
+				: '<button type="button" class="btn btn-secondary btn-xs toggle_attr_status" attr_id="' . $row->id . '" data-status="0"
+					' . ($can_edit ? '' : 'data-no-permission="true"') . '>غیرفعالسازی</button>';
+
+			// default
+			$sub_array[] = '<input type="radio" name="default_attr" class="set_default_attr" attr_id="' . $row->id . '" '
+				. ($row->default == 1 ? 'checked' : '') . '>';
+
+			// ویرایش
+			$sub_array[] = '<button type="button" class="btn btn-warning btn-xs edit_attr" attr_id="' . $row->id . '"
+				' . ($can_edit ? '' : 'data-no-permission="true"') . '>
+				<i class="fa fa-edit fa-lg"></i>
+			</button>';
+
+			$data[] = $sub_array;
+		}
+
+		echo json_encode([
+			'draw'            => isset($post_data['draw']) ? intval($post_data['draw']) : 0,
+			'recordsTotal'    => $result['recordsTotal'],
+			'recordsFiltered' => $result['recordsFiltered'],
+			'data'            => $data
+		]);
+	}
+
+	/**
+	 * ✅ گرفتن اطلاعات یک attribute برای مودال ویرایش
+	 */
+	public function get_attr()
+	{
+		$this->check_permission(['edit', 'full'], 'products');
+
+		$id = $this->input->post('id', TRUE);
+		if (!$id) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$attr = $this->base_model->get_data('product_attributes', '*', ['id' => $id]);
+		if (empty($attr)) {
+			echo json_encode(['status' => 0, 'message' => 'یافت نشد']);
+			return;
+		}
+
+		echo json_encode(['status' => 1, 'data' => $attr[0]]);
+	}
+
+	/**
+	 * ✅ ویرایش یک attribute
+	 */
+	public function update_attr()
+	{
+		$this->check_permission(['edit', 'full'], 'products');
+
+		$id    = $this->input->post('id', TRUE);
+		$price = $this->input->post('price', TRUE);
+
+		if (!$id || empty($price) || $price <= 0) {
+			echo json_encode(['status' => 0, 'message' => 'شناسه و قیمت الزامی است']);
+			return;
+		}
+
+		$old = $this->base_model->get_data('product_attributes', '*', ['id' => $id]);
+		if (empty($old)) {
+			echo json_encode(['status' => 0, 'message' => 'ردیف یافت نشد']);
+			return;
+		}
+		$old = $old[0];
+
+		$now      = date('Y-m-d H:i:s');
+		$new_data = [
+			'model'       => $this->input->post('model', TRUE)       ?: NULL,
+			'jens'        => $this->input->post('jens', TRUE)        ?: NULL,
+			'size'        => $this->input->post('size', TRUE)        ?: NULL,
+			'brand'       => $this->input->post('brand', TRUE)       ?: NULL,
+			'color'       => $this->input->post('color', TRUE)       ?: NULL,
+			'buy_price'   => $this->input->post('buy_price', TRUE)   ?: 0,
+			'price'       => $price,
+			'off_percent' => $this->input->post('off_percent', TRUE) ?: NULL,
+			'supply'      => $this->input->post('supply', TRUE)      ?: 0,
+			'modified'    => $now
+		];
+
+		$this->base_model->update_data('product_attributes', $new_data, ['id' => $id]);
+
+		// لاگ فقط اگه تغییر واقعی بوده
+		$diff_old = $diff_new = [];
+		foreach ($new_data as $k => $v) {
+			if ($k === 'modified') continue;
+			if ((string)$old->$k !== (string)$v) {
+				$diff_old[$k] = $old->$k;
+				$diff_new[$k] = $v;
+			}
+		}
+		if (!empty($diff_old)) {
+			$this->base_model->add_log(
+				'product_attributes', $id, 'update',
+				$diff_old, $diff_new,
+				'ویرایش attribute محصول',
+				uniqid('grp_', true), 'ویرایش attribute'
+			);
+		}
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ افزودن attribute جدید به محصول موجود
+	 */
+	public function add_attr()
+	{
+		$this->check_permission(['edit', 'full'], 'products');
+
+		$code_p = $this->input->post('code_p', TRUE);
+		$price  = $this->input->post('price', TRUE);
+
+		if (!$code_p || empty($price) || $price <= 0) {
+			echo json_encode(['status' => 0, 'message' => 'کد محصول و قیمت الزامی است']);
+			return;
+		}
+
+		$now  = date('Y-m-d H:i:s');
+		$data = [
+			'code_p'      => $code_p,
+			'model'       => $this->input->post('model', TRUE)       ?: NULL,
+			'jens'        => $this->input->post('jens', TRUE)        ?: NULL,
+			'size'        => $this->input->post('size', TRUE)        ?: NULL,
+			'brand'       => $this->input->post('brand', TRUE)       ?: NULL,
+			'color'       => $this->input->post('color', TRUE)       ?: NULL,
+			'buy_price'   => $this->input->post('buy_price', TRUE)   ?: 0,
+			'price'       => $price,
+			'off_percent' => $this->input->post('off_percent', TRUE) ?: NULL,
+			'supply'      => $this->input->post('supply', TRUE)      ?: 0,
+			'isActive'    => 1,
+			'default'     => 0,
+			'created'     => $now,
+			'modified'    => $now
+		];
+
+		$new_id = $this->base_model->insert_data('product_attributes', $data);
+		if (!$new_id) {
+			echo json_encode(['status' => 0, 'message' => 'خطا در افزودن']);
+			return;
+		}
+
+		$this->base_model->add_log(
+			'product_attributes', $new_id, 'insert',
+			null, $data,
+			'افزودن attribute به محصول: ' . $code_p,
+			uniqid('grp_', true), 'افزودن attribute'
+		);
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ تغییر وضعیت فعال/غیرفعال یک attribute
+	 */
+	public function toggle_attr_status()
+	{
+		$this->check_permission(['edit', 'full'], 'products');
+
+		$id     = $this->input->post('id', TRUE);
+		$status = intval($this->input->post('status', TRUE));
+
+		if (!$id) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$attr = $this->base_model->get_data('product_attributes', '*', ['id' => $id]);
+		if (empty($attr)) {
+			echo json_encode(['status' => 0, 'message' => 'یافت نشد']);
+			return;
+		}
+
+		// ✅ default نمی‌تونه غیرفعال بشه
+		if ($attr[0]->default == 1 && $status == 0) {
+			echo json_encode(['status' => 0, 'message' => 'ردیف پیش‌فرض نمی‌تواند غیرفعال شود']);
+			return;
+		}
+
+		$this->base_model->update_data('product_attributes', [
+			'isActive' => $status,
+			'modified' => date('Y-m-d H:i:s')
+		], ['id' => $id]);
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ تنظیم یک attribute به عنوان default
+	 */
+	public function set_default_attr()
+	{
+		$this->check_permission(['edit', 'full'], 'products');
+
+		$id     = $this->input->post('id', TRUE);
+		$code_p = $this->input->post('code_p', TRUE);
+
+		if (!$id || !$code_p) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$now = date('Y-m-d H:i:s');
+
+		$this->db->trans_start();
+
+		// ✅ همه رو از default خارج کن
+		$this->base_model->update_data('product_attributes',
+			['default' => 0, 'modified' => $now],
+			['code_p' => $code_p]
+		);
+
+		// ✅ این یکی رو default کن + مطمئن شو فعاله
+		$this->base_model->update_data('product_attributes',
+			['default' => 1, 'isActive' => 1, 'modified' => $now],
+			['id' => $id]
+		);
+
+		$this->db->trans_complete();
+
+		if ($this->db->trans_status() === FALSE) {
+			echo json_encode(['status' => 0, 'message' => 'خطا در تنظیم پیش‌فرض']);
+			return;
+		}
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ ویرایش اطلاعات اصلی محصول
+	 */
+	public function update_product()
+	{
+		$this->check_permission(['edit', 'full'], 'products');
+
+		$code   = $this->input->post('code', TRUE);
+		$id_p   = $this->input->post('id_p', TRUE);
+		$name   = $this->input->post('name', TRUE);
+		$id_cat = $this->input->post('id_cat', TRUE) ?: NULL;
+		$text   = $this->input->post('text', TRUE);
+
+		if (!$code || !$id_p || empty($name)) {
+			echo json_encode(['status' => 0, 'message' => 'نام محصول الزامی است']);
+			return;
+		}
+
+		$old = $this->base_model->get_data('products', '*', ['id' => $id_p]);
+		if (empty($old)) {
+			echo json_encode(['status' => 0, 'message' => 'محصول یافت نشد']);
+			return;
+		}
+		$old = $old[0];
+
+		$now      = date('Y-m-d H:i:s');
+		$new_data = [
+			'name'     => $name,
+			'id_cat'   => $id_cat,
+			'text'     => $text,
+			'modified' => $now
+		];
+
+		$this->base_model->update_data('products', $new_data, ['id' => $id_p]);
+
+		$diff_old = $diff_new = [];
+		foreach ($new_data as $k => $v) {
+			if ($k === 'modified') continue;
+			if ((string)$old->$k !== (string)$v) {
+				$diff_old[$k] = $old->$k;
+				$diff_new[$k] = $v;
+			}
+		}
+		if (!empty($diff_old)) {
+			$this->base_model->add_log(
+				'products', $id_p, 'update',
+				$diff_old, $diff_new,
+				'ویرایش محصول: ' . $name,
+				uniqid('grp_', true), 'ویرایش محصول'
+			);
+		}
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ آپلود عکس جدید برای محصول موجود
+	 */
+	public function upload_img_product()
+	{
+		$this->check_permission(['edit', 'full'], 'products');
+
+		$product_id = $this->input->post('product_id', TRUE);
+		$code_p     = $this->input->post('code_p', TRUE);
+
+		if (!$product_id || !$code_p) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		// چک تعداد عکس‌های فعلی
+		$existing_images = $this->base_model->get_data('product_images', 'id', ['product_id' => $product_id]);
+		$files = $_FILES['files'];
+
+		if (count($existing_images) + count($files['name']) > 5) {
+			echo json_encode(['status' => 0, 'message' => 'حداکثر ۵ تصویر مجاز است']);
+			return;
+		}
+
+		$upload_path  = FCPATH . 'uploads/products/' . $product_id . '/';
+		$allowed_ext  = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+		$now          = date('Y-m-d H:i:s');
+		$uploaded     = [];
+
+		if (!is_dir($upload_path)) {
+			mkdir($upload_path, 0755, true);
+		}
+
+		for ($i = 0; $i < count($files['name']); $i++) {
+			$ext = strtolower(pathinfo($files['name'][$i], PATHINFO_EXTENSION));
+			if (!in_array($ext, $allowed_ext)) continue;
+
+			$new_name = uniqid() . '.' . $ext;
+			$dest     = $upload_path . $new_name;
+
+			if (move_uploaded_file($files['tmp_name'][$i], $dest)) {
+				$img_id = $this->base_model->insert_data('product_images', [
+					'product_id' => $product_id,
+					'code_p'     => $code_p,
+					'filename'   => $new_name,
+					'created'    => $now
+				]);
+
+				$uploaded[] = [
+					'id'       => $img_id,
+					'filename' => $new_name,
+					'url'      => base_url('uploads/products/' . $product_id . '/' . $new_name)
+				];
+			}
+		}
+
+		echo json_encode(['status' => 1, 'files' => $uploaded]);
+	}
+
+	/**
+	 * ✅ حذف عکس محصول
+	 */
+	public function delete_img_product()
+	{
+		$this->check_permission(['edit', 'full'], 'products');
+
+		$img_id     = $this->input->post('img_id', TRUE);
+		$product_id = $this->input->post('product_id', TRUE);
+		$filename   = basename($this->input->post('filename', TRUE));
+
+		if (!$img_id || !$product_id || !$filename) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		// حذف از دیتابیس
+		$this->base_model->delete_data('product_images', ['id' => $img_id]);
+
+		// حذف فایل از سرور
+		$file_path = FCPATH . 'uploads/products/' . $product_id . '/' . $filename;
+		if (file_exists($file_path)) {
+			unlink($file_path);
+		}
+
+		echo json_encode(['status' => 1]);
+	}
 
 
 
 
 
-	function add_attr()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	/*public function update_products_checkall(){
+		if ($_POST) {
+			$id = explode(',', $_POST['id']);
+			date_default_timezone_set("Asia/Tehran");
+			$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+			if($_POST['id_cat1']!='' && $_POST['id_cat2']!=''){
+				$data['id_cat1'] = $_POST['id_cat1'];}
+			if($_POST['id_cat2']!=''){
+				$data['id_cat2'] = $_POST['id_cat2'];}
+			if($_POST['name']!=''){
+				$data['name'] = $_POST['name'];}
+			if($_POST['text']!=''){
+				$data['text'] = $_POST['text'];}
+
+//			if($_POST['name']!=''){
+//				$data2['name'] = $_POST['name'];}
+
+			$this->base_model->update_rows_by_col('id',$id,'products',$data);
+
+//			if($this->base_model->is_input_available($id, 'id_p', 'shopping_cart')){
+//				$this->base_model->update_rows_by_col('id_p',$id,'shopping_cart',$data2);
+//				echo 2;
+//			}else{
+//				echo 3;
+//			}
+
+
+			echo 1;
+		}
+	}
+	public function copy_product()
+	{
+
+		$id = $_POST['id'];
+		$code = microtime(true) . rand(1111, 9999);
+		$code2 = $_POST['code'];
+		date_default_timezone_set("Asia/Tehran");
+		$products = $this->base_model->get_data('products', '*', array('id' => $id));
+		$product_attributes = $this->base_model->get_data('product_attributes', '*', array('code_p' => $code2));
+		foreach ($products as $p) {
+			$name=$p->name;
+		}
+
+		for ($j = 1; $j <1000; $j++) {
+//			$name1 = $name . '-copy(' . $j . ')';
+			$name1 = $name . '(' . $j . ')';
+			$result = $code;
+
+			if ($this->base_model->is_input_unique($result, 'code', 'products') &&
+				$this->base_model->is_input_unique($name1, 'name', 'products')) {
+
+				foreach ($products as $p) {
+					$data['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+					$data['code'] = $result;
+					$data['name'] = $name1;
+					$data['id_cat1'] = $p->id_cat1;
+					$data['id_cat2'] = $p->id_cat2;
+					$data['text'] = $p->text;
+					$data['isActive'] = $p->isActive;
+					$this->base_model->insert('products', $data);
+					echo 1;
+				}
+				foreach ($product_attributes as $pa){
+					$data2['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+					$data2['code_p'] = $result;
+					$data2['model']= $pa->model;
+					$data2['jens'] = $pa->jens;
+					$data2['size'] = $pa->size;
+					$data2['color'] = $pa->color;
+					$data2['brand'] = $pa->brand;
+					$data2['price'] = $pa->price;
+					$data2['off_percent'] = $pa->off_percent;
+					$data2['supply'] = $pa->supply;
+					$data2['isActive'] = $pa->isActive;
+					$data2['default'] = $pa->default;
+					$this->base_model->insert('product_attributes' , $data2);
+				}
+
+				break;
+
+			}
+
+		}
+
+	}*/
+	/*public function edit_product($code)
+	{
+		$data['title']='ویرایش محصول';
+		$data['category1']=$this->base_model->get_data('category1','*');
+		$data['category2']=$this->base_model->get_data('category2','*');
+		$data['images']=$this->base_model->get_data('images','*');
+
+		$data['products'] = $this->base_model->get_data('products', '*',array('code'=>$code));
+		$data['x'] = $this->base_model->get_join_left('*', 'products', 'product_attributes', 'products.code=product_attributes.code_p', array('code'=>$code));
+		$data['y'] = $this->base_model->get_join_left('*', 'product_attributes', 'products', 'products.code=product_attributes.code_p', array('code'=>$code));
+
+		$data['model']=$this->base_model->get_data('model','*');
+		$data['jens']=$this->base_model->get_data('jens','*');
+		$data['brand']=$this->base_model->get_data('brand','*');
+		$data['color']=$this->base_model->get_data('color','*');
+		$data['size']=$this->base_model->get_data('size','*');
+
+		$this->load->view('admin/layout/header',$data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/edit-product');
+
+	}
+	public function edit_productttt($id)
+	{
+		$data['title']='ویرایش محصول';
+		$data['category1']=$this->base_model->get_data('category1','*');
+		$data['category2']=$this->base_model->get_data('category2','*');
+		$data['images']=$this->base_model->get_data('images','*');
+		$data['products'] = $this->base_model->get_data('products', '*',array('id'=>$id));
+		$this->load->view('admin/layout/header',$data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/edit-product');
+	}*/
+	/*public function edit_prd(){
+		$data2=[];
+		if ($_POST) {
+			$id = $_POST['id'];
+			date_default_timezone_set("Asia/Tehran");
+			$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+			$data['code'] = $_POST['code'];
+			$data['id_cat1'] = $_POST['id_cat1'];
+			$data['id_cat2'] = $_POST['id_cat2'];
+			$data['name'] = $_POST['name'];
+			$data['text'] = $_POST['text'];
+
+			$data2['name'] = $_POST['name'];
+			if($this->base_model->is_input_available($id, 'id_p', 'shopping_cart')){
+				$this->base_model->update('shopping_cart', array('id_p' => $id), $data2);
+				echo 2;
+			}else{
+				echo 3;
+			}
+
+			$this->base_model->update('products', array('id' => $id), $data);
+
+			echo 1;
+		}
+	}
+	public function edit_prd2(){
+		$data2=[];
+		if ($_POST) {
+			$id = $_POST['id'];
+			date_default_timezone_set("Asia/Tehran");
+			$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+			$data['code'] = $_POST['code'];
+			$data['id_cat1'] = $_POST['id_cat1'];
+			$data['id_cat2'] = $_POST['id_cat2'];
+			$data['name'] = $_POST['name'];
+			$data['model'] = $_POST['model'];
+			$data['jens'] = $_POST['jens'];
+			$data['size'] = $_POST['size'];
+			$data['brand'] = $_POST['brand'];
+			$data['price'] = $_POST['price'];
+			$data['off_percent'] = $_POST['off_percent'];
+			$data['text'] = $_POST['text'];
+
+			$data3=$this->base_model->get_data('shopping_cart','*');
+
+			$p=$_POST['price'];
+			$op=$_POST['off_percent'];
+			$name=$_POST['name'];
+			if($_POST['off_percent']==null){
+				$pri=$_POST['price'];
+			}else{
+				$pri=$p-($op/100)*$p;
+			}
+			foreach ($data3 as $row){
+				if($row->id_p==$id){
+					$qty=$row->qty;
+					$data2['name'] = $name;
+					$data2['price'] = $p;
+					$data2['off_percent'] = $op;
+					$data2['off_price'] = ($p-$pri)*$qty;
+					$data2['total_price1'] = $qty*$p;
+					$data2['total_price'] = $qty*$pri;
+					$data2['final_price'] = $qty*$pri;
+				}
+			}
+			$this->base_model->update('products', array('id' => $id), $data);
+			if($this->base_model->is_input_available($id, 'id_p', 'shopping_cart')){
+				$this->base_model->update('shopping_cart', array('id_p' => $id), $data2);
+				echo 2;
+			}else{
+				echo 3;
+			}
+
+
+			echo 1;
+		}
+	}*/
+	/*public function delete_prd()
+	{
+		if ($_POST) {
+			$id_p = $_POST['id_p'];
+			$code_p = $_POST['code_p'];
+			$this->base_model->delete_row('products', 'id', $id_p);
+			$this->base_model->delete_row('shopping_cart', 'id_p', $id_p);
+			$this->base_model->delete_row('product_attributes', 'code_p',$code_p);
+			$this->base_model->delete_row('comments', 'code',$code_p);
+			echo 1;
+		}
+	}*/
+	/*public function delete_products() {
+		if (isset($_POST['ids'])) {
+			$ids = explode(',', $_POST['ids']);
+			$codes = explode(',', $_POST['codes']);
+			$id_p = $ids;
+			$results = $this->base_model->delete_rows_by_ids($ids,'products');
+			$results2 = $this->base_model->delete_rows_by_ids($id_p,'shopping_cart');
+			$results3 = $this->base_model->delete_rows_by_col('code_p',$codes,'product_attributes');
+
+			if ($results === TRUE && $results2 === TRUE && $results3 === TRUE) {
+				echo '<span style="color:green;">Product(s) successfully deleted</span>';
+			} else {
+				echo '<span style="color:red;">Something went wrong during product deletion</span>';
+			}
+		} else {
+			echo '<span style="color:red;">You must select at least one product for deletion</span>';
+		}
+	}*/
+	/*public function products()
+	{
+		$data['title']='محصولات';
+		$data['category1']=$this->base_model->get_data('category1','*');
+		$data['category2']=$this->base_model->get_data('category2','*');
+
+		$this->load->view('admin/layout/header',$data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/products');
+	}
+	function products_list()
+	{
+
+		$fetch_data = $this->base_model->products_make_datatables();
+		$data = array();
+		foreach($fetch_data as $row)
+		{
+
+			$sub_array = array();
+			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check" value="'.$row->id.'" code_p="'.$row->code.'"></input> ';
+			$sub_array[] = '<span style="display: inline-block;width: 100px;white-space: nowrap; overflow: hidden !important;text-overflow: ellipsis;" 
+			title="'.$row->name.'">'.$row->name.'</span>';
+			$sub_array[] = '<span>'.number_format($row->price).'</span>';
+			$sub_array[] = '<span style="display: inline-block;width: 100px;white-space: nowrap; overflow: hidden !important;text-overflow: ellipsis;"
+			title="'.$row->name_cat1.'">'.$row->name_cat1.'</span>';
+			$sub_array[] = '<span style="display: inline-block;width: 100px;white-space: nowrap; overflow: hidden !important;text-overflow: ellipsis;"
+			title="'.$row->name_cat2.'">'.$row->name_cat2.'</span>';
+			$sub_array[] = $row->created;
+			$sub_array[] = $row->modified;
+			if($row->isActive==0) {$sub_array[] = '<button type="button" id="active" id_p="'.$row->id.'" class="btn btn-primary btn-xs">فعال سازی</button>';}
+			else if($row->isActive==1){$sub_array[] = '<button type="button" id="deactive" id_p="'.$row->id.'" class="btn btn-secondary btn-xs">غیرفعال سازی</button>';}
+			$sub_array[] = '
+			<button type="button" id="copy" id_p="'.$row->id.'" code_p="'.$row->code.'" class="btn btn-info">
+			<i class="fa fa-copy"></i>
+			</button>
+			';
+			$sub_array[] = '<a href="'. base_url('admin/edit_product/').$row->code.'">
+			<button type="button" id="edit" code_p="'.$row->code.'" class="btn btn-warning">
+			<i class="fa fa-edit" ></i>
+			</button>
+			</a>';
+			$sub_array[] = '<button type="button" id="delete" id_p="'.$row->id.'" code_p="'.$row->code.'" class="btn btn-danger">
+			<i class="fa fa-trash"></i>
+			</button>';
+			$data[] = $sub_array;
+		}
+		$output = array(
+			"draw"                    =>     intval($_POST["draw"]),
+			"recordsTotal"          =>      $this->base_model->products_get_all_data(),
+			"recordsFiltered"     =>     $this->base_model->products_get_filtered_data(),
+			"data"                    =>     $data
+		);
+		echo json_encode($output);
+	}*/
+	public function attributes()
+	{
+		$data['title']='انبارداری';
+		$data['product_attributes']=$this->base_model->get_data('product_attributes','*');
+		$data['products']=$this->base_model->get_data('products','*');
+
+		$this->load->view('admin/layout/header',$data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/attributes');
+	}
+	public function attrs_list(){
+		$fetch_data = $this->base_model->attrs_make_datatables();
+		$data = array();
+		foreach($fetch_data as $row)
+		{
+
+			$sub_array = array();
+			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check" value="'.$row->id.'" code_p="'.$row->code.'"></input> ';
+			$sub_array[] = '<span style="display: inline-block;width: 100px;white-space: nowrap; overflow: hidden !important;text-overflow: ellipsis;" 
+			title="'.$row->code_p.'">
+			'.$row->code_p.'
+			</span>';
+			$sub_array[] = '<span style="display: inline-block;width: 100px;white-space: nowrap; overflow: hidden !important;text-overflow: ellipsis;" 
+			title="'.$row->name.'">'.$row->name.'</span>';
+
+			$sub_array[] = '<span>'.number_format($row->buy_price).'</span>';
+			$sub_array[] = '<span>'.number_format($row->price).'</span>';
+			$sub_array[] = '<span>'.number_format($row->supply).'</span>';
+			$sub_array[] = '<span>'.$row->unit.'</span>';
+			$sub_array[] = $row->created;
+			$sub_array[] = $row->modified;
+			if($row->isActive==0) {$sub_array[] = '<button type="button" id="active" id_attr="'.$row->id.'" class="btn btn-primary btn-xs">فعال سازی</button>';}
+			else if($row->isActive==1){$sub_array[] = '<button type="button" id="deactive" id_attr="'.$row->id.'" class="btn btn-secondary btn-xs">غیرفعال سازی</button>';}
+			$sub_array[] = '<a href="'. base_url('admin/inventory_attrs/').$row->id.'">
+			<button type="button" id="report" id_attr="'.$row->id.'" class="btn btn-info">
+			<i class="fa fa-bars"></i>
+			</button>
+			</a>';
+			$sub_array[] = '<a href="'. base_url('admin/edit_product/').$row->code.'">
+			<button type="button" id="edit" code_p="'.$row->code.'" class="btn btn-warning">
+			<i class="fa fa-edit" ></i>
+			</button>
+			</a>';
+
+			$data[] = $sub_array;
+		}
+		$output = array(
+			"draw"                    =>     intval($_POST["draw"]),
+			"recordsTotal"          =>      $this->base_model->attrs_get_all_data(),
+			"recordsFiltered"     =>     $this->base_model->attrs_get_filtered_data(),
+			"data"                    =>     $data
+		);
+		echo json_encode($output);
+	}
+
+
+
+
+
+
+
+	/*function add_attr()
 	{
 
 		$model1 = $_POST['model'];
@@ -2733,7 +4131,7 @@ class Admin extends CI_Controller
 
 
 		echo $output;
-	}
+	}*/
 	public function default_attr(){
 		$code = $_POST['code'];
 		$id = $_POST['id'];
@@ -2931,49 +4329,6 @@ class Admin extends CI_Controller
 		}
 	}
 
-
-	/*public function insert_product()
-	{
-		$data['title']='محصول گذاری';
-		$data['category_test']=$this->base_model->get_data('category_test','*');
-		$data['category1']=$this->base_model->get_data('category1','*');
-		$data['category2']=$this->base_model->get_data('category2','*');
-		$data['model']=$this->base_model->get_data('model','*');
-		$data['size']=$this->base_model->get_data('size','*');
-		$data['jens']=$this->base_model->get_data('jens','*');
-		$data['brand']=$this->base_model->get_data('brand','*');
-		$data['color']=$this->base_model->get_data('color','*');
-		$this->load->view('admin/layout/header',$data);
-		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/insert-product3');
-	}
-	public function insert_product2()
-	{
-		$data['title']='محصول گذاری';
-		$data['category1']=$this->base_model->get_data('category1','*');
-		$data['category2']=$this->base_model->get_data('category2','*');
-		$data['size']=$this->base_model->get_data('size','*');
-		$this->load->view('admin/layout/header',$data);
-		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/insert-product2');
-	}*/
-
-
-	/*public function insert_prd()
-	{
-		if ($_POST) {
-			date_default_timezone_set("Asia/Tehran");
-			$data['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-			$data['code'] = $_POST['code'];
-			$data['id_cat1']=$_POST['id_cat1'];
-			$data['id_cat2']=$_POST['id_cat2'];
-			$data['name'] = $_POST['name'];
-			$data['text'] = $_POST['text'];
-			$data['isActive'] = 1;
-			$this->base_model->insert('products', $data);
-			echo 1;
-		}
-	}*/
 
 
 
@@ -4202,254 +5557,7 @@ class Admin extends CI_Controller
 
 
 
-	public function edit_product($code)
-	{
-		$data['title']='ویرایش محصول';
-		$data['category1']=$this->base_model->get_data('category1','*');
-		$data['category2']=$this->base_model->get_data('category2','*');
-		$data['images']=$this->base_model->get_data('images','*');
 
-		$data['products'] = $this->base_model->get_data('products', '*',array('code'=>$code));
-		$data['x'] = $this->base_model->get_join_left('*', 'products', 'product_attributes', 'products.code=product_attributes.code_p', array('code'=>$code));
-		$data['y'] = $this->base_model->get_join_left('*', 'product_attributes', 'products', 'products.code=product_attributes.code_p', array('code'=>$code));
-
-		$data['model']=$this->base_model->get_data('model','*');
-		$data['jens']=$this->base_model->get_data('jens','*');
-		$data['brand']=$this->base_model->get_data('brand','*');
-		$data['color']=$this->base_model->get_data('color','*');
-		$data['size']=$this->base_model->get_data('size','*');
-
-		$this->load->view('admin/layout/header',$data);
-		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/edit-product');
-
-	}
-	public function edit_productttt($id)
-	{
-		$data['title']='ویرایش محصول';
-		$data['category1']=$this->base_model->get_data('category1','*');
-		$data['category2']=$this->base_model->get_data('category2','*');
-		$data['images']=$this->base_model->get_data('images','*');
-		$data['products'] = $this->base_model->get_data('products', '*',array('id'=>$id));
-		$this->load->view('admin/layout/header',$data);
-		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/edit-product');
-	}
-	public function edit_prd(){
-		$data2=[];
-    	if ($_POST) {
-			$id = $_POST['id'];
-			date_default_timezone_set("Asia/Tehran");
-			$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-			$data['code'] = $_POST['code'];
-			$data['id_cat1'] = $_POST['id_cat1'];
-			$data['id_cat2'] = $_POST['id_cat2'];
-			$data['name'] = $_POST['name'];
-			$data['text'] = $_POST['text'];
-
-			$data2['name'] = $_POST['name'];
-			if($this->base_model->is_input_available($id, 'id_p', 'shopping_cart')){
-				$this->base_model->update('shopping_cart', array('id_p' => $id), $data2);
-				echo 2;
-			}else{
-				echo 3;
-			}
-
-			$this->base_model->update('products', array('id' => $id), $data);
-
-			echo 1;
-		}
-	}
-	public function edit_prd2(){
-		$data2=[];
-		if ($_POST) {
-			$id = $_POST['id'];
-			date_default_timezone_set("Asia/Tehran");
-			$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-			$data['code'] = $_POST['code'];
-			$data['id_cat1'] = $_POST['id_cat1'];
-			$data['id_cat2'] = $_POST['id_cat2'];
-			$data['name'] = $_POST['name'];
-			$data['model'] = $_POST['model'];
-			$data['jens'] = $_POST['jens'];
-			$data['size'] = $_POST['size'];
-			$data['brand'] = $_POST['brand'];
-			$data['price'] = $_POST['price'];
-			$data['off_percent'] = $_POST['off_percent'];
-			$data['text'] = $_POST['text'];
-
-			$data3=$this->base_model->get_data('shopping_cart','*');
-
-			$p=$_POST['price'];
-			$op=$_POST['off_percent'];
-			$name=$_POST['name'];
-			if($_POST['off_percent']==null){
-				$pri=$_POST['price'];
-			}else{
-				$pri=$p-($op/100)*$p;
-			}
-			foreach ($data3 as $row){
-				if($row->id_p==$id){
-					$qty=$row->qty;
-					$data2['name'] = $name;
-					$data2['price'] = $p;
-					$data2['off_percent'] = $op;
-					$data2['off_price'] = ($p-$pri)*$qty;
-					$data2['total_price1'] = $qty*$p;
-					$data2['total_price'] = $qty*$pri;
-					$data2['final_price'] = $qty*$pri;
-				}
-			}
-			$this->base_model->update('products', array('id' => $id), $data);
-			if($this->base_model->is_input_available($id, 'id_p', 'shopping_cart')){
-				$this->base_model->update('shopping_cart', array('id_p' => $id), $data2);
-				echo 2;
-			}else{
-				echo 3;
-			}
-
-
-			echo 1;
-		}
-	}
-	public function delete_prd()
-	{
-		if ($_POST) {
-			$id_p = $_POST['id_p'];
-			$code_p = $_POST['code_p'];
-			$this->base_model->delete_row('products', 'id', $id_p);
-			$this->base_model->delete_row('shopping_cart', 'id_p', $id_p);
-			$this->base_model->delete_row('product_attributes', 'code_p',$code_p);
-			$this->base_model->delete_row('comments', 'code',$code_p);
-			echo 1;
-		}
-	}
-	public function delete_products() {
-		if (isset($_POST['ids'])) {
-			$ids = explode(',', $_POST['ids']);
-			$codes = explode(',', $_POST['codes']);
-			$id_p = $ids;
-			$results = $this->base_model->delete_rows_by_ids($ids,'products');
-			$results2 = $this->base_model->delete_rows_by_ids($id_p,'shopping_cart');
-			$results3 = $this->base_model->delete_rows_by_col('code_p',$codes,'product_attributes');
-
-			if ($results === TRUE && $results2 === TRUE && $results3 === TRUE) {
-				echo '<span style="color:green;">Product(s) successfully deleted</span>';
-			} else {
-				echo '<span style="color:red;">Something went wrong during product deletion</span>';
-			}
-		} else {
-			echo '<span style="color:red;">You must select at least one product for deletion</span>';
-		}
-	}
-	public function products()
-	{
-		$data['title']='محصولات';
-		$data['category1']=$this->base_model->get_data('category1','*');
-		$data['category2']=$this->base_model->get_data('category2','*');
-
-		$this->load->view('admin/layout/header',$data);
-		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/products');
-	}
-	function products_list()
-	{
-
-		$fetch_data = $this->base_model->products_make_datatables();
-		$data = array();
-		foreach($fetch_data as $row)
-		{
-
-			$sub_array = array();
-			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check" value="'.$row->id.'" code_p="'.$row->code.'"></input> ';
-			$sub_array[] = '<span style="display: inline-block;width: 100px;white-space: nowrap; overflow: hidden !important;text-overflow: ellipsis;" 
-			title="'.$row->name.'">'.$row->name.'</span>';
-			$sub_array[] = '<span>'.number_format($row->price).'</span>';
-			$sub_array[] = '<span style="display: inline-block;width: 100px;white-space: nowrap; overflow: hidden !important;text-overflow: ellipsis;"
-			title="'.$row->name_cat1.'">'.$row->name_cat1.'</span>';
-			$sub_array[] = '<span style="display: inline-block;width: 100px;white-space: nowrap; overflow: hidden !important;text-overflow: ellipsis;"
-			title="'.$row->name_cat2.'">'.$row->name_cat2.'</span>';
-			$sub_array[] = $row->created;
-			$sub_array[] = $row->modified;
-			if($row->isActive==0) {$sub_array[] = '<button type="button" id="active" id_p="'.$row->id.'" class="btn btn-primary btn-xs">فعال سازی</button>';}
-			else if($row->isActive==1){$sub_array[] = '<button type="button" id="deactive" id_p="'.$row->id.'" class="btn btn-secondary btn-xs">غیرفعال سازی</button>';}
-			$sub_array[] = '
-			<button type="button" id="copy" id_p="'.$row->id.'" code_p="'.$row->code.'" class="btn btn-info">
-			<i class="fa fa-copy"></i>
-			</button>
-			';
-			$sub_array[] = '<a href="'. base_url('admin/edit_product/').$row->code.'">
-			<button type="button" id="edit" code_p="'.$row->code.'" class="btn btn-warning">
-			<i class="fa fa-edit" ></i>
-			</button>
-			</a>';
-			$sub_array[] = '<button type="button" id="delete" id_p="'.$row->id.'" code_p="'.$row->code.'" class="btn btn-danger">
-			<i class="fa fa-trash"></i>
-			</button>';
-			$data[] = $sub_array;
-		}
-		$output = array(
-			"draw"                    =>     intval($_POST["draw"]),
-			"recordsTotal"          =>      $this->base_model->products_get_all_data(),
-			"recordsFiltered"     =>     $this->base_model->products_get_filtered_data(),
-			"data"                    =>     $data
-		);
-		echo json_encode($output);
-	}
-	public function attributes()
-	{
-		$data['title']='انبارداری';
-		$data['product_attributes']=$this->base_model->get_data('product_attributes','*');
-		$data['products']=$this->base_model->get_data('products','*');
-
-		$this->load->view('admin/layout/header',$data);
-		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/attributes');
-	}
-	public function attrs_list(){
-		$fetch_data = $this->base_model->attrs_make_datatables();
-		$data = array();
-		foreach($fetch_data as $row)
-		{
-
-			$sub_array = array();
-			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check" value="'.$row->id.'" code_p="'.$row->code.'"></input> ';
-			$sub_array[] = '<span style="display: inline-block;width: 100px;white-space: nowrap; overflow: hidden !important;text-overflow: ellipsis;" 
-			title="'.$row->code_p.'">
-			'.$row->code_p.'
-			</span>';
-			$sub_array[] = '<span style="display: inline-block;width: 100px;white-space: nowrap; overflow: hidden !important;text-overflow: ellipsis;" 
-			title="'.$row->name.'">'.$row->name.'</span>';
-
-			$sub_array[] = '<span>'.number_format($row->buy_price).'</span>';
-			$sub_array[] = '<span>'.number_format($row->price).'</span>';
-			$sub_array[] = '<span>'.number_format($row->supply).'</span>';
-			$sub_array[] = '<span>'.$row->unit.'</span>';
-			$sub_array[] = $row->created;
-			$sub_array[] = $row->modified;
-			if($row->isActive==0) {$sub_array[] = '<button type="button" id="active" id_attr="'.$row->id.'" class="btn btn-primary btn-xs">فعال سازی</button>';}
-			else if($row->isActive==1){$sub_array[] = '<button type="button" id="deactive" id_attr="'.$row->id.'" class="btn btn-secondary btn-xs">غیرفعال سازی</button>';}
-			$sub_array[] = '<a href="'. base_url('admin/inventory_attrs/').$row->id.'">
-			<button type="button" id="report" id_attr="'.$row->id.'" class="btn btn-info">
-			<i class="fa fa-bars"></i>
-			</button>
-			</a>';
-			$sub_array[] = '<a href="'. base_url('admin/edit_product/').$row->code.'">
-			<button type="button" id="edit" code_p="'.$row->code.'" class="btn btn-warning">
-			<i class="fa fa-edit" ></i>
-			</button>
-			</a>';
-
-			$data[] = $sub_array;
-		}
-		$output = array(
-			"draw"                    =>     intval($_POST["draw"]),
-			"recordsTotal"          =>      $this->base_model->attrs_get_all_data(),
-			"recordsFiltered"     =>     $this->base_model->attrs_get_filtered_data(),
-			"data"                    =>     $data
-		);
-		echo json_encode($output);
-	}
 
 
 	public function inventory(){
@@ -5069,36 +6177,7 @@ class Admin extends CI_Controller
 	}
 
 
-	public function update_products_checkall(){
-		if ($_POST) {
-			$id = explode(',', $_POST['id']);
-			date_default_timezone_set("Asia/Tehran");
-			$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-			if($_POST['id_cat1']!='' && $_POST['id_cat2']!=''){
-			$data['id_cat1'] = $_POST['id_cat1'];}
-			if($_POST['id_cat2']!=''){
-			$data['id_cat2'] = $_POST['id_cat2'];}
-			if($_POST['name']!=''){
-			$data['name'] = $_POST['name'];}
-			if($_POST['text']!=''){
-			$data['text'] = $_POST['text'];}
 
-//			if($_POST['name']!=''){
-//				$data2['name'] = $_POST['name'];}
-
-			$this->base_model->update_rows_by_col('id',$id,'products',$data);
-
-//			if($this->base_model->is_input_available($id, 'id_p', 'shopping_cart')){
-//				$this->base_model->update_rows_by_col('id_p',$id,'shopping_cart',$data2);
-//				echo 2;
-//			}else{
-//				echo 3;
-//			}
-
-
-			echo 1;
-		}
-	}
 
 	public function row_active(){
 		if($_POST){
@@ -5195,61 +6274,7 @@ class Admin extends CI_Controller
 		}
 	}
 
-	public function copy_product()
-	{
 
-		$id = $_POST['id'];
-		$code = microtime(true) . rand(1111, 9999);
-		$code2 = $_POST['code'];
-		date_default_timezone_set("Asia/Tehran");
-		$products = $this->base_model->get_data('products', '*', array('id' => $id));
-		$product_attributes = $this->base_model->get_data('product_attributes', '*', array('code_p' => $code2));
-		foreach ($products as $p) {
-			$name=$p->name;
-		}
-
-		for ($j = 1; $j <1000; $j++) {
-//			$name1 = $name . '-copy(' . $j . ')';
-			$name1 = $name . '(' . $j . ')';
-			$result = $code;
-
-			if ($this->base_model->is_input_unique($result, 'code', 'products') &&
-				$this->base_model->is_input_unique($name1, 'name', 'products')) {
-
-				foreach ($products as $p) {
-					$data['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-					$data['code'] = $result;
-					$data['name'] = $name1;
-					$data['id_cat1'] = $p->id_cat1;
-					$data['id_cat2'] = $p->id_cat2;
-					$data['text'] = $p->text;
-					$data['isActive'] = $p->isActive;
-					$this->base_model->insert('products', $data);
-					echo 1;
-				}
-				foreach ($product_attributes as $pa){
-					$data2['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-					$data2['code_p'] = $result;
-					$data2['model']= $pa->model;
-					$data2['jens'] = $pa->jens;
-					$data2['size'] = $pa->size;
-					$data2['color'] = $pa->color;
-					$data2['brand'] = $pa->brand;
-					$data2['price'] = $pa->price;
-					$data2['off_percent'] = $pa->off_percent;
-					$data2['supply'] = $pa->supply;
-					$data2['isActive'] = $pa->isActive;
-					$data2['default'] = $pa->default;
-					$this->base_model->insert('product_attributes' , $data2);
-				}
-
-				break;
-
-			}
-
-		}
-
-	}
 
 	public function rules()
 	{
@@ -5799,7 +6824,7 @@ class Admin extends CI_Controller
 
 	}
 
-	public function check_orders()
+	/*public function check_orders()
 	{
 		if ($_POST) {
 			$table = $_POST['table'];
@@ -5814,7 +6839,7 @@ class Admin extends CI_Controller
 				echo 0;
 			}
 		}
-	}
+	}*/
 	public function check_orders_selected(){
 		if (isset($_POST['ids'])) {
 			$id = explode(',', $_POST['ids']);
