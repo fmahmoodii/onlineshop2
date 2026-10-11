@@ -2303,10 +2303,19 @@ class Admin extends CI_Controller
 		$data['code'] = uniqid('prd_', true);
 
 		$data['title']    = 'ورود محصول';
-		$data['categories'] = $this->base_model->get_data(
+
+		$all_cats = $this->base_model->get_data(
 			'categories', '*', ['isActive' => 1], null, null, null, null, null,
 			['parentId' => 'ASC', 'name_cat' => 'ASC']
 		);
+		$by_parent = [];
+		foreach ($all_cats as $row) {
+			$by_parent[(string)$row->parentId][] = $row;
+		}
+		$flat = [];
+		$this->_flatten_category_tree($by_parent, '0', 0, $flat);
+		$data['categories'] = $flat;
+
 		$data['model']  = $this->base_model->get_data('model', '*');
 		$data['size']   = $this->base_model->get_data('size', '*');
 		$data['jens']   = $this->base_model->get_data('jens', '*');
@@ -3198,10 +3207,19 @@ class Admin extends CI_Controller
 
 		$data['title']      = 'ویرایش محصول';
 		$data['product']    = $product[0];
-		$data['categories'] = $this->base_model->get_data(
+
+		$all_cats = $this->base_model->get_data(
 			'categories', '*', ['isActive' => 1], null, null, null, null, null,
 			['parentId' => 'ASC', 'name_cat' => 'ASC']
 		);
+		$by_parent = [];
+		foreach ($all_cats as $row) {
+			$by_parent[(string)$row->parentId][] = $row;
+		}
+		$flat = [];
+		$this->_flatten_category_tree($by_parent, '0', 0, $flat);
+		$data['categories'] = $flat;
+
 		$data['model']  = $this->base_model->get_data('model', '*');
 		$data['size']   = $this->base_model->get_data('size', '*');
 		$data['jens']   = $this->base_model->get_data('jens', '*');
@@ -3670,6 +3688,595 @@ class Admin extends CI_Controller
 
 
 
+	/**
+	 * ✅ نمایش صفحه لیست کدهای تخفیف
+	 */
+	public function discount_codes()
+	{
+		$logged_user_id = $this->session->userdata('id');
+		if (!$logged_user_id) {
+			redirect('admin/login_page');
+			return;
+		}
+
+		if (!$this->base_model->has_permission($logged_user_id, ['view', 'full'], 'discount_codes')) {
+			$data['title'] = 'دسترسی غیرمجاز';
+			$this->load->view('admin/layout/header', $data);
+			$this->load->view('admin/layout/sidebar');
+			$this->load->view('admin/errors/no_permission');
+			return;
+		}
+
+		$data['action_permissions'] = [
+			'add'    => $this->base_model->has_permission($logged_user_id, ['insert', 'full'], 'discount_codes'),
+			'edit'   => $this->base_model->has_permission($logged_user_id, ['edit', 'full'],   'discount_codes'),
+			'delete' => $this->base_model->has_permission($logged_user_id, ['delete', 'full'], 'discount_codes'),
+		];
+
+		$data['title'] = 'کدهای تخفیف';
+		$this->load->view('admin/layout/header', $data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/discount_codes', $data);
+	}
+
+	/**
+	 * ✅ لیست کدهای تخفیف برای DataTable
+	 */
+	public function discount_list()
+	{
+		$this->check_permission(['view', 'full'], 'discount_codes');
+
+		$post_data = $this->input->post(NULL, TRUE);
+
+		$columns = [
+			null,
+			'discount_codes.code',
+			'discount_codes.mablagh',
+			'discount_codes.start_date',
+			'discount_codes.end_date',
+			'discount_codes.min_price',
+			'discount_codes.uses',
+			null, null, null, null
+		];
+
+		$result = $this->base_model->datatable(
+			'discount_codes',
+			$columns,
+			$post_data,
+			'discount_codes.*',
+			null, null,
+			['discount_codes.id' => 'DESC']
+		);
+
+		$logged_user_id    = $this->session->userdata('id');
+		$permissions_check = [
+			'edit'   => $this->base_model->has_permission($logged_user_id, ['edit',   'full'], 'discount_codes'),
+			'delete' => $this->base_model->has_permission($logged_user_id, ['delete', 'full'], 'discount_codes'),
+		];
+
+		// ✅ گرفتن تعداد کاربران و محصولات مرتبط یکجا (بدون N+1)
+		$disc_ids          = array_column($result['data'], 'id');
+		$user_count_map    = [];
+		$product_count_map = [];
+
+		if (!empty($disc_ids)) {
+			$user_links = $this->base_model->get_data(
+				'discount_users', 'discount_id',
+				null, null, ['discount_id' => $disc_ids]
+			);
+			foreach ($user_links as $u) {
+				$user_count_map[$u->discount_id] = ($user_count_map[$u->discount_id] ?? 0) + 1;
+			}
+
+			$product_links = $this->base_model->get_data(
+				'discount_products', 'discount_id',
+				null, null, ['discount_id' => $disc_ids]
+			);
+			foreach ($product_links as $p) {
+				$product_count_map[$p->discount_id] = ($product_count_map[$p->discount_id] ?? 0) + 1;
+			}
+		}
+
+		$now  = date('Y-m-d');
+		$data = [];
+
+		foreach ($result['data'] as $row) {
+			$sub_array = [];
+
+			$sub_array[] = '<input type="checkbox" name="row-check" class="checkall" disc_id="' . $row->id . '">';
+			$sub_array[] = '<code>' . htmlspecialchars($row->code) . '</code>';
+			$sub_array[] = number_format($row->mablagh) . ' تومان';
+
+			// ✅ تاریخ شمسی برای نمایش
+			$sub_array[] = $row->start_date ? $this->date_j($row->start_date) : '—';
+			$sub_array[] = $row->end_date   ? $this->date_j($row->end_date)   : '—';
+
+			$sub_array[] = $row->min_price ? number_format($row->min_price) . ' تومان' : '—';
+			$sub_array[] = $row->uses ?? 0;
+
+			// ✅ وضعیت انقضا
+			if (empty($row->end_date)) {
+				$sub_array[] = '<span class="label label-default">نامحدود</span>';
+			} elseif ($row->end_date < $now) {
+				$sub_array[] = '<span class="label label-danger">منقضی شده</span>';
+			} elseif ($row->end_date == $now) {
+				$sub_array[] = '<span class="label label-warning">امروز منقضی می‌شود</span>';
+			} else {
+				$days_left   = (strtotime($row->end_date) - strtotime($now)) / 86400;
+				$sub_array[] = $days_left <= 7
+					? '<span class="label label-warning">' . intval($days_left) . ' روز مانده</span>'
+					: '<span class="label label-success">فعال</span>';
+			}
+
+			// ✅ محدودیت کاربران و محصولات
+			$u_count     = $user_count_map[$row->id]    ?? 0;
+			$p_count     = $product_count_map[$row->id] ?? 0;
+			$sub_array[] = '<small>'
+				. ($u_count > 0 ? $u_count . ' کاربر' : '<span class="text-muted">همه کاربران</span>')
+				. ' | '
+				. ($p_count > 0 ? $p_count . ' محصول' : '<span class="text-muted">همه محصولات</span>')
+				. '</small>';
+
+			// وضعیت (فعال/غیرفعال)
+			$sub_array[] = ($row->isActive == 0)
+				? '<button class="btn btn-primary btn-xs toggle_disc_status" disc_id="' . $row->id . '" data-status="1"
+					' . ($permissions_check['edit'] ? '' : 'data-no-permission="true"') . '>فعالسازی</button>'
+				: '<button class="btn btn-secondary btn-xs toggle_disc_status" disc_id="' . $row->id . '" data-status="0"
+					' . ($permissions_check['edit'] ? '' : 'data-no-permission="true"') . '>غیرفعالسازی</button>';
+
+			// ویرایش — لینک به صفحه جداگانه
+			if ($permissions_check['edit']) {
+				$sub_array[] = '<a href="' . base_url('admin/edit_discount/' . $row->id) . '">
+					<button class="btn btn-warning btn-xs"><i class="fa fa-edit fa-lg"></i></button>
+				</a>';
+			} else {
+				$sub_array[] = '<button class="btn btn-warning btn-xs" onclick="alert(\'شما دسترسی ویرایش ندارید\')">
+					<i class="fa fa-edit fa-lg"></i>
+				</button>';
+			}
+
+			// حذف
+			$sub_array[] = '<button class="btn btn-danger btn-xs delete_disc" disc_id="' . $row->id . '"
+				' . ($permissions_check['delete'] ? '' : 'data-no-permission="true"') . '>
+				<i class="fa fa-trash fa-lg"></i>
+			</button>';
+
+			$data[] = $sub_array;
+		}
+
+		echo json_encode([
+			'draw'            => isset($post_data['draw']) ? intval($post_data['draw']) : 0,
+			'recordsTotal'    => $result['recordsTotal'],
+			'recordsFiltered' => $result['recordsFiltered'],
+			'data'            => $data
+		]);
+	}
+
+	/**
+	 * ✅ فعال/غیرفعال کردن
+	 */
+	public function toggle_discount_status()
+	{
+		$this->check_permission(['edit', 'full'], 'discount_codes');
+
+		$id     = $this->input->post('id', TRUE);
+		$status = intval($this->input->post('status', TRUE));
+
+		if (!$id) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$this->base_model->update_data('discount_codes', [
+			'isActive' => $status,
+			'modified' => date('Y-m-d H:i:s')
+		], ['id' => $id]);
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ حذف نرم (تکی و گروهی)
+	 */
+	public function delete_discount()
+	{
+		$this->check_permission(['delete', 'full'], 'discount_codes');
+
+		$ids = $this->input->post('ids', TRUE);
+		if (empty($ids)) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+		$ids = (array)$ids;
+
+		$before = $this->base_model->get_data('discount_codes', '*', null, null, ['id' => $ids]);
+		if (empty($before)) {
+			echo json_encode(['status' => 0, 'message' => 'یافت نشد']);
+			return;
+		}
+
+		$this->base_model->soft_delete('discount_codes', $ids, true, 'id');
+
+		$group_id = uniqid('grp_', true);
+		foreach ($before as $disc) {
+			$this->base_model->add_log(
+				'discount_codes', $disc->id, 'soft_delete',
+				(array)$disc, null,
+				'حذف کد تخفیف: ' . $disc->code,
+				$group_id, 'حذف کد تخفیف'
+			);
+		}
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ نمایش فرم افزودن کد تخفیف
+	 */
+	public function discount_form()
+	{
+		$logged_user_id = $this->session->userdata('id');
+		if (!$logged_user_id) { redirect('admin/login_page'); return; }
+
+		if (!$this->base_model->has_permission($logged_user_id, ['insert', 'full'], 'discount_codes')) {
+			$data['title'] = 'دسترسی غیرمجاز';
+			$this->load->view('admin/layout/header', $data);
+			$this->load->view('admin/layout/sidebar');
+			$this->load->view('admin/errors/no_permission');
+			return;
+		}
+
+		$data['title']    = 'افزودن کد تخفیف';
+		$data['users']    = $this->base_model->get_data('users', 'id, phone_number', ['isActive' => 1]);
+		$data['profiles'] = $this->base_model->get_data('profile', 'user_id, name, family');
+		$data['products'] = $this->base_model->get_data(
+			'products',
+			'products.id, products.name, pa.price',
+			['products.isActive' => 1],
+			null, null, null, null,
+			['product_attributes pa' => 'pa.code_p = products.code AND pa.`default` = 1']
+		);
+
+		$this->load->view('admin/layout/header', $data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/insert_discount', $data);
+	}
+
+	/**
+	 * ✅ ثبت کد تخفیف جدید با validation
+	 */
+	public function insert_discount()
+	{
+		$logged_user_id = $this->session->userdata('id');
+		if (!$logged_user_id) { redirect('admin/login_page'); return; }
+
+		if (!$this->base_model->has_permission($logged_user_id, ['insert', 'full'], 'discount_codes')) {
+			redirect('admin/discount_form');
+			return;
+		}
+
+		if (!$this->input->post()) {
+			redirect('admin/discount_form');
+			return;
+		}
+
+		$this->load->library('form_validation');
+		$this->load->helper('form');
+
+		$mablagh = $this->input->post('mablagh', TRUE);
+
+		$this->form_validation->set_message('required',     'فیلد الزامی است');
+		$this->form_validation->set_message('greater_than', '%s باید بیشتر از مبلغ تخفیف (%d تومان) باشد');
+
+		$this->form_validation->set_rules('code',       'کد تخفیف',           'trim|required|max_length[100]|callback__check_code_unique');
+		$this->form_validation->set_rules('mablagh',    'مبلغ تخفیف',          'trim|required|greater_than[0]');
+		$this->form_validation->set_rules('start_date', 'تاریخ شروع',          'trim|required');
+		$this->form_validation->set_rules('end_date',   'تاریخ پایان',         'trim|required');
+		$this->form_validation->set_rules('uses',       'تعداد دفعات استفاده', 'trim|required|greater_than[0]');
+		$this->form_validation->set_rules('min_price',  'حداقل خرید',          'trim|required|greater_than[' . $mablagh . ']');
+
+		if ($this->form_validation->run()) {
+
+			$now      = date('Y-m-d H:i:s');
+			$code     = strtoupper(trim($this->input->post('code', TRUE)));
+			$disc_data = [
+				'code'       => $code,
+				'mablagh'    => $this->input->post('mablagh',   TRUE),
+				'start_date' => $this->input->post('datetime1', TRUE),
+				'end_date'   => $this->input->post('datetime2', TRUE),
+				'min_price'  => $this->input->post('min_price', TRUE),
+				'uses'       => $this->input->post('uses',      TRUE),
+				'isActive'   => 1,
+				'created'    => $now,
+				'modified'   => $now
+			];
+
+			$this->db->trans_start();
+
+			$new_id = $this->base_model->insert_data('discount_codes', $disc_data);
+
+			if ($new_id) {
+				$products = $this->input->post('products', TRUE);
+				if (!empty($products) && is_array($products)) {
+					$batch = [];
+					foreach ($products as $pid) {
+						$batch[] = ['discount_id' => $new_id, 'product_id' => (int)$pid];
+					}
+					$this->base_model->insert_data('discount_products', $batch, true);
+				}
+
+				$users = $this->input->post('users', TRUE);
+				if (!empty($users) && is_array($users)) {
+					$batch = [];
+					foreach ($users as $uid) {
+						$batch[] = ['discount_id' => $new_id, 'user_id' => (int)$uid];
+					}
+					$this->base_model->insert_data('discount_users', $batch, true);
+				}
+			}
+
+			$this->db->trans_complete();
+
+			if ($this->db->trans_status() === FALSE) {
+				$this->db->trans_rollback();
+				$this->session->set_flashdata('error', 'خطا در ثبت کد تخفیف');
+				redirect('admin/discount_form');
+				return;
+			}
+
+			$this->base_model->add_log(
+				'discount_codes', $new_id, 'insert', null, $disc_data,
+				'ثبت کد تخفیف: ' . $code, uniqid('grp_', true), 'ثبت کد تخفیف'
+			);
+
+			redirect('admin/discount_codes');
+
+		} else {
+			$this->discount_form();
+		}
+	}
+
+	/**
+	 * ✅ نمایش فرم ویرایش کد تخفیف
+	 */
+	public function edit_discount($id = null)
+	{
+		$logged_user_id = $this->session->userdata('id');
+		if (!$logged_user_id) { redirect('admin/login_page'); return; }
+
+		if (!$this->base_model->has_permission($logged_user_id, ['edit', 'full'], 'discount_codes')) {
+			$data['title'] = 'دسترسی غیرمجاز';
+			$this->load->view('admin/layout/header', $data);
+			$this->load->view('admin/layout/sidebar');
+			$this->load->view('admin/errors/no_permission');
+			return;
+		}
+
+		if (!$id) { redirect('admin/discount_codes'); return; }
+
+		$discount = $this->base_model->get_data('discount_codes', '*', ['id' => $id]);
+		if (empty($discount)) { redirect('admin/discount_codes'); return; }
+
+		$data['title']             = 'ویرایش کد تخفیف';
+		$data['discount']          = $discount; // ✅ هم‌نام با ویو
+		$data['discount_products'] = $this->base_model->get_data('discount_products', '*', ['discount_id' => $id]);
+		$data['discount_users']    = $this->base_model->get_data('discount_users',    '*', ['discount_id' => $id]);
+		$data['users']             = $this->base_model->get_data('users', 'id, phone_number', ['isActive' => 1]);
+		$data['profiles']          = $this->base_model->get_data('profile', 'user_id, name, family');
+		$data['products']          = $this->base_model->get_data(
+			'products',
+			'products.id, products.name, pa.price',
+			['products.isActive' => 1],
+			null, null, null, null,
+			['product_attributes pa' => 'pa.code_p = products.code AND pa.`default` = 1']
+		);
+
+		$this->load->view('admin/layout/header', $data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/edit_discount', $data);
+	}
+
+	/**
+	 * ✅ ذخیره ویرایش کد تخفیف
+	 */
+	public function update_discount()
+	{
+		$logged_user_id = $this->session->userdata('id');
+		if (!$logged_user_id) { redirect('admin/login_page'); return; }
+
+		if (!$this->base_model->has_permission($logged_user_id, ['edit', 'full'], 'discount_codes')) {
+			redirect('admin/discount_codes');
+			return;
+		}
+
+		if (!$this->input->post()) {
+			redirect('admin/discount_codes');
+			return;
+		}
+
+		$this->load->library('form_validation');
+		$this->load->helper('form');
+
+		$id      = $this->input->post('id',      TRUE);
+		$mablagh = $this->input->post('mablagh', TRUE);
+
+		if (!$id) { redirect('admin/discount_codes'); return; }
+
+		$this->form_validation->set_message('required',     'فیلد الزامی است');
+		$this->form_validation->set_message('greater_than', '%s باید بیشتر از مبلغ تخفیف (%d تومان) باشد');
+
+		$this->form_validation->set_rules('code',       'کد تخفیف',           'trim|required|max_length[100]|callback__check_code_edit[' . $id . ']');
+		$this->form_validation->set_rules('mablagh',    'مبلغ تخفیف',          'trim|required|greater_than[0]');
+		$this->form_validation->set_rules('start_date', 'تاریخ شروع',          'trim|required');
+		$this->form_validation->set_rules('end_date',   'تاریخ پایان',         'trim|required');
+		$this->form_validation->set_rules('uses',       'تعداد دفعات استفاده', 'trim|required|greater_than[0]');
+		$this->form_validation->set_rules('min_price',  'حداقل خرید',          'trim|required|greater_than[' . $mablagh . ']');
+
+		if ($this->form_validation->run()) {
+
+			$old = $this->base_model->get_data('discount_codes', '*', ['id' => $id]);
+			if (empty($old)) { redirect('admin/discount_codes'); return; }
+			$old = $old[0];
+
+			$now      = date('Y-m-d H:i:s');
+			$code     = strtoupper(trim($this->input->post('code', TRUE)));
+			$new_data = [
+				'code'       => $code,
+				'mablagh'    => $this->input->post('mablagh',   TRUE),
+				'start_date' => $this->input->post('datetime1', TRUE),
+				'end_date'   => $this->input->post('datetime2', TRUE),
+				'min_price'  => $this->input->post('min_price', TRUE),
+				'uses'       => $this->input->post('uses',      TRUE),
+				'modified'   => $now
+			];
+
+			$this->db->trans_start();
+
+			$this->base_model->update_data('discount_codes', $new_data, ['id' => $id]);
+
+			$this->base_model->delete_data('discount_products', ['discount_id' => $id]);
+			$products = $this->input->post('products', TRUE);
+			if (!empty($products) && is_array($products)) {
+				$batch = [];
+				foreach ($products as $pid) {
+					$batch[] = ['discount_id' => $id, 'product_id' => (int)$pid];
+				}
+				$this->base_model->insert_data('discount_products', $batch, true);
+			}
+
+			$this->base_model->delete_data('discount_users', ['discount_id' => $id]);
+			$users = $this->input->post('users', TRUE);
+			if (!empty($users) && is_array($users)) {
+				$batch = [];
+				foreach ($users as $uid) {
+					$batch[] = ['discount_id' => $id, 'user_id' => (int)$uid];
+				}
+				$this->base_model->insert_data('discount_users', $batch, true);
+			}
+
+			$this->db->trans_complete();
+
+			if ($this->db->trans_status() === FALSE) {
+				$this->db->trans_rollback();
+				$this->session->set_flashdata('error', 'خطا در ویرایش کد تخفیف');
+				redirect('admin/edit_discount/' . $id);
+				return;
+			}
+
+			$diff_old = $diff_new = [];
+			foreach ($new_data as $k => $v) {
+				if ($k === 'modified') continue;
+				if ((string)$old->$k !== (string)$v) {
+					$diff_old[$k] = $old->$k;
+					$diff_new[$k] = $v;
+				}
+			}
+			if (!empty($diff_old)) {
+				$this->base_model->add_log(
+					'discount_codes', $id, 'update', $diff_old, $diff_new,
+					'ویرایش کد تخفیف: ' . $code, uniqid('grp_', true), 'ویرایش کد تخفیف'
+				);
+			}
+
+			redirect('admin/discount_codes');
+
+		} else {
+			$this->edit_discount($id);
+		}
+	}
+
+	/**
+	 * ✅ چک real-time تکراری بودن کد (insert)
+	 * get_data خودکار deleted_at IS NULL رو فیلتر می‌کنه
+	 */
+	public function check_discount_code()
+	{
+		$code = strtoupper(trim($this->input->post('code', TRUE)));
+		if (empty($code)) { echo ''; return; }
+
+		$exists = $this->base_model->get_data('discount_codes', 'id', ['code' => $code]);
+
+		echo !empty($exists)
+			? '<label class="text-danger"><i class="fa fa-times"></i> در سیستم موجود است</label>'
+			: '<label class="text-success"><i class="fa fa-check"></i> قابل قبول است</label>';
+	}
+
+	/**
+	 * ✅ چک real-time تکراری بودن کد (edit — به جز خود رکورد)
+	 */
+	public function check_discount_code_edit()
+	{
+		$code = strtoupper(trim($this->input->post('code', TRUE)));
+		$id   = $this->input->post('id', TRUE);
+		if (empty($code)) { echo ''; return; }
+
+		$exists = $this->base_model->get_data(
+			'discount_codes', 'id',
+			['code' => $code],
+			null, null,
+			['id' => [$id]]  // where_not_in
+		);
+
+		echo !empty($exists)
+			? '<label class="text-danger"><i class="fa fa-times"></i> در سیستم موجود است</label>'
+			: '<label class="text-success"><i class="fa fa-check"></i> قابل قبول است</label>';
+	}
+
+	/**
+	 * ✅ callback validation — یکتایی کد برای insert
+	 */
+	public function _check_code_unique($code)
+	{
+		$exists = $this->base_model->get_data('discount_codes', 'id', ['code' => strtoupper(trim($code))]);
+		if (!empty($exists)) {
+			$this->form_validation->set_message('_check_code_unique', 'این کد تخفیف قبلاً ثبت شده است');
+			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * ✅ callback validation — یکتایی کد برای edit (به جز خود رکورد)
+	 */
+	public function _check_code_edit($code, $id)
+	{
+		$exists = $this->base_model->get_data(
+			'discount_codes', 'id',
+			['code' => strtoupper(trim($code))],
+			null, null,
+			['id' => [$id]]  // where_not_in
+		);
+		if (!empty($exists)) {
+			$this->form_validation->set_message('_check_code_edit', 'این کد تخفیف قبلاً ثبت شده است');
+			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * ✅ جستجوی کد تخفیف برای dropdown
+	 */
+	public function search_code()
+	{
+		$query = $this->input->post('query', TRUE) ?: '';
+		if (empty($query)) { echo 0; return; }
+
+		// ✅ get_data با like — deleted_at هم خودکار فیلتر می‌شه
+		$results = $this->base_model->get_data(
+			'discount_codes', 'id, code',
+			null,
+			['code' => $query]  // like
+		);
+
+		if (empty($results)) { echo 0; return; }
+
+		$output = '';
+		foreach ($results as $row) {
+			$output .= '<a class="tag" id="tag_' . $row->id . '" id_c="' . $row->id . '" style="display:block;">'
+				. htmlspecialchars($row->code) . '</a>';
+		}
+		echo $output;
+	}
 
 
 
@@ -3683,12 +4290,592 @@ class Admin extends CI_Controller
 
 
 
+	public function off_code()
+	{
+		$data['title']='کد تخفیف';
+		$data['off_code']=$this->base_model->get_data('off_code','*');
+		$data['off_code_products']=$this->base_model->get_data('off_code_products','*');
+		$data['off_code_users']=$this->base_model->get_data('off_code_users','*');
+		$data['products']=$this->base_model->get_data('products','*');
+		$data['users']=$this->base_model->get_data('users','*');
+		$data['profile']=$this->base_model->get_data('profile','*');
+
+
+		$this->load->view('admin/layout/header',$data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/off-code');
+	}
+	public function off_code_form()
+	{
+		$data['title']='افزودن کد تخفیف';
+		$data['off_code']=$this->base_model->get_data('off_code','*');
+		$data['register']=$this->base_model->get_data('register','*');
+		$data['profile']=$this->base_model->get_data('profile','*');
+		$data['products']=$this->base_model->get_data('products','*');
+		$this->load->view('admin/layout/header',$data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/insert_off_code');
+	}
+	public function get_code($id)
+	{
+
+
+		$off_code=$this->base_model->get_data('off_code','code',array('id'=>$id));
+		if (isset($off_code[0])){
+			echo $off_code[0]->code;
+		}
+//			foreach ($off_code as $off){
+//				echo $off->code;
+//				break;
+//			}
 
 
 
+	}
+	/*function search_code()
+	{
+		$output = '';
+		$query = '';
+		if($this->input->post('query'))
+		{
+			$query = $this->input->post('query');
+		}
+
+		$data = $this->base_model->search_off_code($query);
 
 
+		if($data->num_rows() > 0)
+		{
+			foreach($data->result() as $row)
+			{
+				$output .= ' <a
+				class="tag" id="tag_'.$row->id.'" id_c="'.$row->id.'" style="display: block;">'.$row->code.'</a> ';
 
+			}
+		} else {
+			$output = 0;
+		}
+		echo $output;
+	}*/
+	function off_code_list(){
+		$fetch_data = $this->base_model->off_code_make_datatables();
+		$data = [];
+
+		foreach($fetch_data as $row)
+		{
+
+			if($row->end_date < date('Y-m-d') . ' ' . date('H:i:s')){$color='red';}
+
+			$sub_array = array();
+
+			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check" value="'.$row->id.'" id_off="'.$row->id.'"></input> ';
+
+			$sub_array[] = '<span style="display: inline-block;width: 100px;white-space: nowrap; overflow: hidden !important;text-overflow: ellipsis;
+" title="'.$row->code.'">'.$row->code.'</span>';
+			$sub_array[] = number_format($row->mablagh);
+			$sub_array[] = '<span>'.$row->start_date.'</span>';
+			$sub_array[] = $row->end_date;
+			date_default_timezone_set('Asia/Tehran');
+			$date_expire = $row->end_date;
+			$date = new DateTime($date_expire);
+			$x = date('Y-m-d') . ' ' . date('H:i:s');
+			$now = new DateTime($x);
+//					echo $x;
+			$sub_array[] = '<span id="spanDate" style="color:'.($row->end_date < date('Y-m-d') . ' ' . date('H:i:s') ? "red" :  "green" ).'">'.($row->end_date < date('Y-m-d') . ' ' . date('H:i:s') ? "منقضی شده" :  $date->diff($now)->format("%a روز") ).'</span>';
+			$sub_array[] = $row->created;
+			$sub_array[] = $row->modified;
+			if($row->isActive==0) {$sub_array[] = '<button type="button" id="active" id_off="'.$row->id.'" class="btn btn-primary btn-xs">فعالسازی</button>';}
+			else if($row->isActive==1){$sub_array[] = '<button type="button" id="deactive" id_off="'.$row->id.'" class="btn btn-secondry btn-xs">غیرفعالسازی</button>';}
+			$sub_array[] = '
+			<button type="button" id="copy" id_off="'.$row->id.'" class="btn btn-info">
+			<i class="fa fa-copy"></i>
+			</button>
+			';
+			$sub_array[] = '<a href="'. base_url('admin/edit_off_code/').$row->id .'">
+			<button type="button" id="edit" id_off="'.$row->id.'" class="btn btn-warning">
+			<i class="fa fa-edit" ></i>
+			</button>
+			</a>';
+			$sub_array[] = '<button type="button" id="delete" id_off="'.$row->id.'" class="btn btn-danger">
+			<i class="fa fa-trash" ></i>
+			</button>';
+			$data[] = $sub_array;
+			$color = '';
+		}
+		$output = array(
+			"draw"                    =>     intval($_POST["draw"]),
+			"recordsTotal"          =>      $this->base_model->off_code_get_all_data(),
+			"recordsFiltered"     =>     $this->base_model->off_code_get_filtered_data(),
+			"data"                    =>     $data,
+		);
+		echo json_encode($output);
+	}
+
+	public function insert_off_code()
+	{
+		if ($_POST) {
+			$this->load->library('form_validation');
+			$this->load->helper('form');
+			date_default_timezone_set("Asia/Tehran");
+			$data['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+			$data['code'] = $_POST['code'];
+			$code = $_POST['code'];
+			$data['mablagh'] = $_POST['mablagh'];
+			$data['start_date'] = $_POST['datetime1'];
+			$data['end_date'] = $_POST['datetime2'];
+			$data['min_price'] = $_POST['min_price'];
+			$data['uses'] = $_POST['uses'];
+			$data['isActive'] = '1';
+
+			$this->form_validation->set_message('required', 'فیلد الزامی');
+			$this->form_validation->set_message('is_unique[off_code.code]', 'این مقدار تکراری است');
+			$this->form_validation->set_message('greater_than', '%s باید بیشتر از %d (مبلغ تخفیف) باشد');
+
+			$this->form_validation->set_rules('code', 'کد تخفیف', 'trim|required|is_unique[off_code.code]');
+			$this->form_validation->set_rules('mablagh', 'مبلغ تخفیف', 'trim|required');
+			$this->form_validation->set_rules('start_date', 'تاریخ شروع', 'trim|required');
+			$this->form_validation->set_rules('end_date', 'تاریخ پایان', 'trim|required');
+			$this->form_validation->set_rules('uses', 'تعداد دفعات استفاده', 'trim|required');
+			$this->form_validation->set_rules('min_price', 'حداقل خرید', 'trim|required|greater_than['.$_POST['mablagh'].']');
+
+			if ($this->form_validation->run()) {
+				if ($_POST) {
+					date_default_timezone_set("Asia/Tehran");
+					$data['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+					$data['code'] = $_POST['code'];
+					$code = $_POST['code'];
+					$data['mablagh'] = $_POST['mablagh'];
+					$data['start_date'] = $_POST['datetime1'];
+					$data['end_date'] = $_POST['datetime2'];
+					$data['min_price'] = $_POST['min_price'];
+					$data['uses'] = $_POST['uses'];
+					$data['isActive'] = '1';
+					$this->base_model->insert('off_code', $data);
+					$off_code = $this->base_model->get_data('off_code', 'id', array('code' => $code));
+					if (isset($off_code[0])) {
+						$id = $off_code[0]->id;
+					}
+
+					if (!(isset($_POST['products'])) ){
+						$data2['id_product'] = 'all';
+						$data2['id_off'] = $id;
+						$data2['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+						$this->base_model->insert('off_code_products', $data2);
+					}else {
+						foreach ($_POST['products'] as $x) {
+							$data2['id_product'] = $x;
+							$data2['id_off'] = $id;
+							$data2['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+							$this->base_model->insert('off_code_products', $data2);
+						}
+					}
+
+					if (!(isset($_POST['users'])) ){
+						$data3['id_user'] = 'all';
+						$data3['id_off'] = $id;
+						$data3['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+						$this->base_model->insert('off_code_users', $data3);
+					}else {
+						foreach ($_POST['users'] as $xx) {
+							$data3['id_user'] = $xx;
+							$data3['id_off'] = $id;
+							$data3['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+							$this->base_model->insert('off_code_users', $data3);
+						}
+					}
+
+//					redirect('admin/off_code_form');
+					redirect('admin/off_code');
+				}
+
+			} else {
+				$this->off_code_form();
+			}
+		}
+	}
+
+	function off_code_validation2(){
+		$id=$_POST['id'];
+		$data['code'] = $_POST['code'];
+		$data['mablagh'] = $_POST['mablagh'];
+		$off_code=$this->base_model->get_data('off_code','code',array('id'=>$id));
+		if (isset($off_code[0])){
+			$x = $off_code[0]->code;
+		}
+//		foreach ($off_code as $off){
+//			$x=$off->code;
+//			break;
+//		}
+		if($_POST['code'] != $x) {
+			$this->form_validation->set_rules('code', 'off_code', 'required|trim|is_unique[off_code.code]');
+			if($this->form_validation->run()){
+				echo 1;
+			}else{ echo 2;}
+
+		} else {
+			$this->form_validation->set_rules('code', 'off_code', 'required|trim');
+		}
+
+		$this->form_validation->set_rules('mablagh', 'off_code', 'required|trim|greater_than[0]');
+		if($this->form_validation->run())
+		{
+			echo 1;
+		}else{
+			if($_POST["code"]==''){
+				echo 2;
+			}
+			if(!($_POST["mablagh"]>0) || $_POST["mablagh"]==''){
+				echo 3;
+			}
+		}
+	}
+	function off_code_validation(){
+		$data['code'] = $_POST['code'];
+		$data['mablagh'] = $_POST['mablagh'];
+		$this->form_validation->set_rules('code', 'off_code', 'required|trim|is_unique[off_code.code]');
+		$this->form_validation->set_rules('mablagh', 'off_code', 'required|trim|greater_than[0]');
+		if($this->form_validation->run())
+		{
+			echo 1;
+		}else{
+			if($this->base_model->is_code_available($_POST["code"]) || $_POST["code"]==''){
+				echo 2;
+			}
+			if(!($_POST["mablagh"]>=0) || $_POST["mablagh"]==''){
+				echo 3;
+			}
+		}
+	}
+	function check_mablagh()
+	{
+
+		if($_POST["mablagh"] >= 0)
+		{
+			echo '<label class="text-success"></span> قابل قبول است</label>';
+		}
+		else
+		{
+			echo '<label class="text-danger"></span> مقدار منفی</label>';
+		}
+
+	}
+	function check_code()
+	{
+
+		if($this->base_model->is_code_available($_POST["code"]))
+		{
+			echo '<label class="text-danger"></span> در سیستم موجود است</label>';
+		}
+		else
+		{
+			echo '<label class="text-success"></span> قابل قبول است</label>';
+		}
+
+	}
+	function check_code2()
+	{
+
+		if($this->base_model->check_value('off_code',array('code'=>$_POST["code"],'id!='=>$_POST["id_off"])) )
+		{
+			echo '<label class="text-success"></span> قابل قبول است</label>';
+		}
+		else
+		{
+			echo '<label class="text-danger"></span> در سیستم موجود است</label>';
+		}
+
+	}
+	public function edit_off_code($id)
+	{
+		$data['title']='ویرایش کد تخفیف';
+
+		$data['off_code']=$this->base_model->get_data('off_code','*',array('id'=>$id));
+		$data['off_code_products']=$this->base_model->get_data('off_code_products','*',array('id_off'=>$id));
+		$data['off_code_users']=$this->base_model->get_data('off_code_users','*',array('id_off'=>$id));
+		$data['products']=$this->base_model->get_data('products','*');
+		$data['register']=$this->base_model->get_data('register','*');
+		$data['profile']=$this->base_model->get_data('profile','*');
+		$this->load->view('admin/layout/header',$data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/edit-off-code');
+	}
+	public function edit_off(){
+
+		if ($_POST) {
+			$this->load->library('form_validation');
+			$this->load->helper('form');
+			date_default_timezone_set("Asia/Tehran");
+			$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+			$id_off = $_POST['id'];
+			$data['code'] = $_POST['code'];
+			$code = $_POST['code'];
+			$data['mablagh'] = $_POST['mablagh'];
+			$data['start_date'] = $_POST['datetime1'];
+			$data['end_date'] = $_POST['datetime2'];
+			$data['min_price'] = $_POST['min_price'];
+			$data['uses'] = $_POST['uses'];
+			$data['isActive'] = '1';
+
+			$this->form_validation->set_message('required', 'فیلد الزامی');
+			$this->form_validation->set_message('_edit_unique', 'در سیستم موجود است');
+			$this->form_validation->set_message('greater_than', '%s باید بیشتر از %d (مبلغ تخفیف) باشد');
+
+			$this->form_validation->set_rules('code', 'کد تخفیف', 'trim|required|callback__edit_unique['.$id_off.']');
+			$this->form_validation->set_rules('mablagh', 'مبلغ تخفیف', 'trim|required');
+			$this->form_validation->set_rules('start_date', 'تاریخ شروع', 'trim|required');
+			$this->form_validation->set_rules('end_date', 'تاریخ پایان', 'trim|required');
+			$this->form_validation->set_rules('uses', 'تعداد دفعات استفاده', 'trim|required');
+			$this->form_validation->set_rules('min_price', 'حداقل خرید', 'trim|required|greater_than['.$_POST['mablagh'].']');
+
+			if ($this->form_validation->run()) {
+				if ($_POST) {
+					date_default_timezone_set("Asia/Tehran");
+					$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+					$id_off =  $_POST['id'];
+					$data['code'] = $_POST['code'];
+					$code = $_POST['code'];
+					$data['mablagh'] = $_POST['mablagh'];
+					$data['start_date'] = $_POST['datetime1'];
+					$data['end_date'] = $_POST['datetime2'];
+					$data['min_price'] = $_POST['min_price'];
+					$data['uses'] = $_POST['uses'];
+					$data['isActive'] = '1';
+					$this->base_model->update('off_code',array('id'=>$id_off) ,$data);
+
+					if($this->base_model->is_inputs_available($id_off, 'id_off', 'off_code_products')
+						||$this->base_model->is_inputs_available('all', 'id_off', 'off_code_products')){
+						$this->base_model->delete_rows_by_col('id_off',$id_off,'off_code_products');
+					}
+					if (!(isset($_POST['products'])) ){
+						$data2['id_product'] = 'all';
+						$data2['id_off'] = $id_off;
+						$data2['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+						$this->base_model->insert('off_code_products' ,$data2);
+					}else {
+						foreach ($_POST['products'] as $x) {
+							$data2['id_product'] = $x;
+							$data2['id_off'] = $id_off;
+							$data2['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+							$this->base_model->insert('off_code_products' ,$data2);
+						}
+					}
+					if($this->base_model->is_inputs_available($id_off, 'id_off', 'off_code_users')
+						||$this->base_model->is_inputs_available($id_off, 'id_off', 'off_code_users')){
+						$this->base_model->delete_rows_by_col('id_off',$id_off,'off_code_users');
+					}
+					if (!(isset($_POST['users'])) ){
+						$data3['id_user'] = 'all';
+						$data3['id_off'] = $id_off;
+						$data3['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+						$this->base_model->insert('off_code_users' ,$data3);
+					}else {
+						foreach ($_POST['users'] as $xx) {
+							$data3['id_user'] = $xx;
+							$data3['id_off'] = $id_off;
+							$data3['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+							$this->base_model->insert('off_code_users' ,$data3);
+						}
+					}
+
+					redirect('admin/edit_off_code/'.$id_off);
+
+				}
+
+			} else {
+				$this->edit_off_code($id_off);
+			}
+		}
+
+	}
+
+	function _edit_unique($x,$y)
+	{
+		$return_value = $this->base_model->check_value('off_code',array('code'=>$x,'id!='=>$y));
+		if ($return_value)
+		{
+			return true;
+		}
+		else
+		{
+			return false;
+		}
+	}
+	public function edit_multi_off(){
+		if ($_POST) {
+			$id = explode(',', $_POST['id']);
+			$id_off = $id;
+			date_default_timezone_set("Asia/Tehran");
+			$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+			if($_POST['mablagh']!=''){
+				$data['mablagh'] = $_POST['mablagh'];}
+			if($_POST['start_date']!=''){
+				$data['start_date'] = $_POST['datetime1'];}
+			if($_POST['end_date']!=''){
+				$data['end_date'] = $_POST['datetime2'];}
+			if($_POST['min_price']!=''){
+				$data['min_price'] = $_POST['min_price'];}
+			if($_POST['uses']!=''){
+				$data['uses'] = $_POST['uses'];}
+			$this->base_model->update_rows_by_col('id',$id,'off_code',$data);
+
+			if($this->base_model->is_inputs_available($id_off, 'id_off', 'off_code_products')){
+				$this->base_model->delete_rows_by_col('id_off',$id_off,'off_code_products');
+			}
+
+			foreach ($_POST['products'] as $x){
+				if($x!=''){
+					$data2['id_product'] = $x;
+					$data2['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+
+					for ($i=0;$i<count($id);$i++){
+						$data2['id_off'] = $id[$i];
+						$this->base_model->insert('off_code_products',$data2);}
+
+				}
+			}
+
+			if ($this->base_model->is_inputs_available($id_off, 'id_off', 'off_code_users')) {
+				$this->base_model->delete_rows_by_col('id_off', $id_off, 'off_code_users');}
+
+			foreach ($_POST['users'] as $xx) {
+				if ($xx != '') {
+					$data3['id_user'] = $xx;
+					$data3['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+
+					for ($i=0;$i<count($id);$i++){
+						$data3['id_off'] = $id[$i];
+						$this->base_model->insert('off_code_users',$data3);}
+
+				}
+			}
+
+			redirect('admin/off_code/');
+		}
+
+
+	}
+
+	/*public function check_orders()
+	{
+		if ($_POST) {
+			$table = $_POST['table'];
+			$column = $_POST['column'];
+			$id = $_POST['id'];
+			if($this->base_model->is_inputs_available($id, $column, $table))
+			{
+				echo 1;
+			}
+			else
+			{
+				echo 0;
+			}
+		}
+	}*/
+	public function check_orders_selected(){
+		if (isset($_POST['ids'])) {
+			$id = explode(',', $_POST['ids']);
+			$orders = $this->base_model->get_datas('shopping_cart_order', '*', 'off_code', $id, NULL, NULL, NULL, NULL, NULL, 'order_code');
+		}
+		$i = 0;
+		if(isset($orders[0])){foreach ($orders as $ord){
+			$data['ord'] = ++$i;
+			$data['off'][$i] = $ord->off_code;
+		}}else{
+			$data['ord'] = 0;
+		}
+		echo json_encode($data);
+	}
+
+	public function delete_off()
+	{
+		if ($_POST) {
+			$id = $_POST['id'];
+			$this->base_model->delete_row('off_code', 'id', $id);
+			echo 1;
+		}
+	}
+
+	public function copy_off_code()
+	{
+
+		$id = $_POST['id'];
+		date_default_timezone_set("Asia/Tehran");
+		$off_code = $this->base_model->get_data('off_code', '*', array('id' => $id));
+
+		if (isset($off_code[0])){
+			$code = $off_code[0]->code;
+		}
+
+//		foreach ($off_code as $off) {
+//			$code=$off->code;
+//		}
+
+		for ($j = 1; $j <1000; $j++) {
+//			$code1 = $code . '-copy(' . $j . ')';
+			$code1 = $code . '(' . $j . ')';
+
+			if ($this->base_model->is_input_unique($code1, 'code', 'off_code')) {
+
+				foreach ($off_code as $off) {
+					$data['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+					$data['code'] = $code1;
+					$data['mablagh'] = $off->mablagh;
+					$data['start_date'] = $off->start_date;
+					$data['end_date'] = $off->end_date;
+					$data['isActive'] = $off->isActive;
+					$this->base_model->insert('off_code', $data);
+					echo 1;
+				}
+
+				break;
+
+			}
+
+		}
+
+	}
+	public function delete_off_codes() {
+		if (isset($_POST['ids'])) {
+			$ids = explode(',', $_POST['ids']);
+//			$id_off = $ids;
+			$results = $this->base_model->delete_rows_by_ids($ids,'off_code');
+//			$results2 = $this->base_model->delete_rows_by_ids($id_off,'shopping_cart');
+
+			if ($results === TRUE) {
+				echo '<span style="color:green;">row(s) successfully deleted</span>';
+			} else {
+				echo '<span style="color:red;">Something went wrong during row deletion</span>';
+			}
+		} else {
+			echo '<span style="color:red;">You must select at least one row for deletion</span>';
+		}
+	}
+
+	public function update_off_checkall(){
+		if ($_POST) {
+			$id = explode(',', $_POST['id']);
+			date_default_timezone_set("Asia/Tehran");
+			$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
+			if($_POST['mablagh']!=''){
+				$data['mablagh'] = $_POST['mablagh'];}
+			if($_POST['start_date']!=''){
+				$data['start_date'] = $_POST['start_date'];}
+			if($_POST['end_date']!=''){
+				$data['end_date'] = $_POST['end_date'];}
+
+			$this->base_model->update_rows_by_col('id',$id,'off_code',$data);
+
+//			if($this->base_model->is_input_available($id, 'id_p', 'shopping_cart')){
+//				$this->base_model->update_rows_by_col('id_p',$id,'shopping_cart',$data2);
+//				echo 2;
+//			}else{
+//				echo 3;
+//			}
+
+
+			echo 1;
+		}
+	}
 
 
 
@@ -6359,592 +7546,7 @@ class Admin extends CI_Controller
 		}
 	}
 
-	public function off_code()
-	{
-		$data['title']='کد تخفیف';
-		$data['off_code']=$this->base_model->get_data('off_code','*');
-		$data['off_code_products']=$this->base_model->get_data('off_code_products','*');
-		$data['off_code_users']=$this->base_model->get_data('off_code_users','*');
-		$data['products']=$this->base_model->get_data('products','*');
-		$data['register']=$this->base_model->get_data('register','*');
-		$data['profile']=$this->base_model->get_data('profile','*');
 
-
-		$this->load->view('admin/layout/header',$data);
-		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/off-code');
-	}
-	public function off_code_form()
-	{
-		$data['title']='افزودن کد تخفیف';
-		$data['off_code']=$this->base_model->get_data('off_code','*');
-		$data['register']=$this->base_model->get_data('register','*');
-		$data['profile']=$this->base_model->get_data('profile','*');
-		$data['products']=$this->base_model->get_data('products','*');
-		$this->load->view('admin/layout/header',$data);
-		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/insert_off_code');
-	}
-	public function get_code($id)
-	{
-
-
-			$off_code=$this->base_model->get_data('off_code','code',array('id'=>$id));
-			if (isset($off_code[0])){
-				echo $off_code[0]->code;
-			}
-//			foreach ($off_code as $off){
-//				echo $off->code;
-//				break;
-//			}
-
-
-
-	}
-	function search_code()
-	{
-		$output = '';
-		$query = '';
-		if($this->input->post('query'))
-		{
-			$query = $this->input->post('query');
-		}
-
-		$data = $this->base_model->search_off_code($query);
-
-
-		if($data->num_rows() > 0)
-		{
-			foreach($data->result() as $row)
-			{
-				$output .= ' <a
-				class="tag" id="tag_'.$row->id.'" id_c="'.$row->id.'" style="display: block;">'.$row->code.'</a> ';
-
-			}
-		} else {
-			$output = 0;
-		}
-		echo $output;
-	}
-	function off_code_list(){
-			$fetch_data = $this->base_model->off_code_make_datatables();
-			$data = [];
-
-			foreach($fetch_data as $row)
-			{
-
-				if($row->end_date < date('Y-m-d') . ' ' . date('H:i:s')){$color='red';}
-
-				$sub_array = array();
-
-				$sub_array[] = '<input type="checkbox" class="checkall" name="row-check" value="'.$row->id.'" id_off="'.$row->id.'"></input> ';
-
-				$sub_array[] = '<span style="display: inline-block;width: 100px;white-space: nowrap; overflow: hidden !important;text-overflow: ellipsis;
-" title="'.$row->code.'">'.$row->code.'</span>';
-				$sub_array[] = number_format($row->mablagh);
-				$sub_array[] = '<span>'.$row->start_date.'</span>';
-				$sub_array[] = $row->end_date;
-					date_default_timezone_set('Asia/Tehran');
-					$date_expire = $row->end_date;
-					$date = new DateTime($date_expire);
-					$x = date('Y-m-d') . ' ' . date('H:i:s');
-					$now = new DateTime($x);
-//					echo $x;
-				$sub_array[] = '<span id="spanDate" style="color:'.($row->end_date < date('Y-m-d') . ' ' . date('H:i:s') ? "red" :  "green" ).'">'.($row->end_date < date('Y-m-d') . ' ' . date('H:i:s') ? "منقضی شده" :  $date->diff($now)->format("%a روز") ).'</span>';
-				$sub_array[] = $row->created;
-				$sub_array[] = $row->modified;
-				if($row->isActive==0) {$sub_array[] = '<button type="button" id="active" id_off="'.$row->id.'" class="btn btn-primary btn-xs">فعالسازی</button>';}
-				else if($row->isActive==1){$sub_array[] = '<button type="button" id="deactive" id_off="'.$row->id.'" class="btn btn-secondry btn-xs">غیرفعالسازی</button>';}
-				$sub_array[] = '
-			<button type="button" id="copy" id_off="'.$row->id.'" class="btn btn-info">
-			<i class="fa fa-copy"></i>
-			</button>
-			';
-				$sub_array[] = '<a href="'. base_url('admin/edit_off_code/').$row->id .'">
-			<button type="button" id="edit" id_off="'.$row->id.'" class="btn btn-warning">
-			<i class="fa fa-edit" ></i>
-			</button>
-			</a>';
-				$sub_array[] = '<button type="button" id="delete" id_off="'.$row->id.'" class="btn btn-danger">
-			<i class="fa fa-trash" ></i>
-			</button>';
-				$data[] = $sub_array;
-				$color = '';
-			}
-			$output = array(
-				"draw"                    =>     intval($_POST["draw"]),
-				"recordsTotal"          =>      $this->base_model->off_code_get_all_data(),
-				"recordsFiltered"     =>     $this->base_model->off_code_get_filtered_data(),
-				"data"                    =>     $data,
-			);
-			echo json_encode($output);
-	}
-
-	public function insert_off_code()
-	{
-		if ($_POST) {
-			$this->load->library('form_validation');
-			$this->load->helper('form');
-			date_default_timezone_set("Asia/Tehran");
-			$data['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-			$data['code'] = $_POST['code'];
-			$code = $_POST['code'];
-			$data['mablagh'] = $_POST['mablagh'];
-			$data['start_date'] = $_POST['datetime1'];
-			$data['end_date'] = $_POST['datetime2'];
-			$data['min_price'] = $_POST['min_price'];
-			$data['uses'] = $_POST['uses'];
-			$data['isActive'] = '1';
-
-			$this->form_validation->set_message('required', 'فیلد الزامی');
-			$this->form_validation->set_message('is_unique[off_code.code]', 'این مقدار تکراری است');
-			$this->form_validation->set_message('greater_than', '%s باید بیشتر از %d (مبلغ تخفیف) باشد');
-
-			$this->form_validation->set_rules('code', 'کد تخفیف', 'trim|required|is_unique[off_code.code]');
-			$this->form_validation->set_rules('mablagh', 'مبلغ تخفیف', 'trim|required');
-			$this->form_validation->set_rules('start_date', 'تاریخ شروع', 'trim|required');
-			$this->form_validation->set_rules('end_date', 'تاریخ پایان', 'trim|required');
-			$this->form_validation->set_rules('uses', 'تعداد دفعات استفاده', 'trim|required');
-			$this->form_validation->set_rules('min_price', 'حداقل خرید', 'trim|required|greater_than['.$_POST['mablagh'].']');
-
-			if ($this->form_validation->run()) {
-				if ($_POST) {
-					date_default_timezone_set("Asia/Tehran");
-					$data['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-					$data['code'] = $_POST['code'];
-					$code = $_POST['code'];
-					$data['mablagh'] = $_POST['mablagh'];
-					$data['start_date'] = $_POST['datetime1'];
-					$data['end_date'] = $_POST['datetime2'];
-					$data['min_price'] = $_POST['min_price'];
-					$data['uses'] = $_POST['uses'];
-					$data['isActive'] = '1';
-					$this->base_model->insert('off_code', $data);
-					$off_code = $this->base_model->get_data('off_code', 'id', array('code' => $code));
-					if (isset($off_code[0])) {
-						$id = $off_code[0]->id;
-					}
-
-					if (!(isset($_POST['products'])) ){
-						$data2['id_product'] = 'all';
-						$data2['id_off'] = $id;
-						$data2['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-						$this->base_model->insert('off_code_products', $data2);
-					}else {
-						foreach ($_POST['products'] as $x) {
-							$data2['id_product'] = $x;
-							$data2['id_off'] = $id;
-							$data2['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-							$this->base_model->insert('off_code_products', $data2);
-						}
-					}
-
-					if (!(isset($_POST['users'])) ){
-						$data3['id_user'] = 'all';
-						$data3['id_off'] = $id;
-						$data3['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-						$this->base_model->insert('off_code_users', $data3);
-					}else {
-						foreach ($_POST['users'] as $xx) {
-							$data3['id_user'] = $xx;
-							$data3['id_off'] = $id;
-							$data3['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-							$this->base_model->insert('off_code_users', $data3);
-						}
-					}
-
-//					redirect('admin/off_code_form');
-					redirect('admin/off_code');
-				}
-
-			} else {
-				$this->off_code_form();
-			}
-		}
-	}
-
-	function off_code_validation2(){
-		$id=$_POST['id'];
-		$data['code'] = $_POST['code'];
-		$data['mablagh'] = $_POST['mablagh'];
-		$off_code=$this->base_model->get_data('off_code','code',array('id'=>$id));
-		if (isset($off_code[0])){
-			$x = $off_code[0]->code;
-		}
-//		foreach ($off_code as $off){
-//			$x=$off->code;
-//			break;
-//		}
-		if($_POST['code'] != $x) {
-			$this->form_validation->set_rules('code', 'off_code', 'required|trim|is_unique[off_code.code]');
-			if($this->form_validation->run()){
-				echo 1;
-			}else{ echo 2;}
-
-		} else {
-			$this->form_validation->set_rules('code', 'off_code', 'required|trim');
-		}
-
-		$this->form_validation->set_rules('mablagh', 'off_code', 'required|trim|greater_than[0]');
-		if($this->form_validation->run())
-		{
-			echo 1;
-		}else{
-			if($_POST["code"]==''){
-				echo 2;
-			}
-			if(!($_POST["mablagh"]>0) || $_POST["mablagh"]==''){
-				echo 3;
-			}
-		}
-	}
-	function off_code_validation(){
-		$data['code'] = $_POST['code'];
-		$data['mablagh'] = $_POST['mablagh'];
-		$this->form_validation->set_rules('code', 'off_code', 'required|trim|is_unique[off_code.code]');
-		$this->form_validation->set_rules('mablagh', 'off_code', 'required|trim|greater_than[0]');
-		if($this->form_validation->run())
-		{
-			echo 1;
-		}else{
-			if($this->base_model->is_code_available($_POST["code"]) || $_POST["code"]==''){
-				echo 2;
-			}
-			if(!($_POST["mablagh"]>=0) || $_POST["mablagh"]==''){
-				echo 3;
-			}
-		}
-	}
-	function check_mablagh()
-	{
-
-		if($_POST["mablagh"] >= 0)
-		{
-			echo '<label class="text-success"></span> قابل قبول است</label>';
-		}
-		else
-		{
-			echo '<label class="text-danger"></span> مقدار منفی</label>';
-		}
-
-	}
-	function check_code()
-	{
-
-			if($this->base_model->is_code_available($_POST["code"]))
-			{
-				echo '<label class="text-danger"></span> در سیستم موجود است</label>';
-			}
-			else
-			{
-				echo '<label class="text-success"></span> قابل قبول است</label>';
-			}
-
-	}
-	function check_code2()
-	{
-
-		if($this->base_model->check_value('off_code',array('code'=>$_POST["code"],'id!='=>$_POST["id_off"])) )
-		{
-			echo '<label class="text-success"></span> قابل قبول است</label>';
-		}
-		else
-		{
-			echo '<label class="text-danger"></span> در سیستم موجود است</label>';
-		}
-
-	}
-	public function edit_off_code($id)
-	{
-		$data['title']='ویرایش کد تخفیف';
-
-		$data['off_code']=$this->base_model->get_data('off_code','*',array('id'=>$id));
-		$data['off_code_products']=$this->base_model->get_data('off_code_products','*',array('id_off'=>$id));
-		$data['off_code_users']=$this->base_model->get_data('off_code_users','*',array('id_off'=>$id));
-		$data['products']=$this->base_model->get_data('products','*');
-		$data['register']=$this->base_model->get_data('register','*');
-		$data['profile']=$this->base_model->get_data('profile','*');
-		$this->load->view('admin/layout/header',$data);
-		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/edit-off-code');
-	}
-	public function edit_off(){
-
-		if ($_POST) {
-			$this->load->library('form_validation');
-			$this->load->helper('form');
-			date_default_timezone_set("Asia/Tehran");
-			$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-			$id_off = $_POST['id'];
-			$data['code'] = $_POST['code'];
-			$code = $_POST['code'];
-			$data['mablagh'] = $_POST['mablagh'];
-			$data['start_date'] = $_POST['datetime1'];
-			$data['end_date'] = $_POST['datetime2'];
-			$data['min_price'] = $_POST['min_price'];
-			$data['uses'] = $_POST['uses'];
-			$data['isActive'] = '1';
-
-			$this->form_validation->set_message('required', 'فیلد الزامی');
-			$this->form_validation->set_message('_edit_unique', 'در سیستم موجود است');
-			$this->form_validation->set_message('greater_than', '%s باید بیشتر از %d (مبلغ تخفیف) باشد');
-
-			$this->form_validation->set_rules('code', 'کد تخفیف', 'trim|required|callback__edit_unique['.$id_off.']');
-			$this->form_validation->set_rules('mablagh', 'مبلغ تخفیف', 'trim|required');
-			$this->form_validation->set_rules('start_date', 'تاریخ شروع', 'trim|required');
-			$this->form_validation->set_rules('end_date', 'تاریخ پایان', 'trim|required');
-			$this->form_validation->set_rules('uses', 'تعداد دفعات استفاده', 'trim|required');
-			$this->form_validation->set_rules('min_price', 'حداقل خرید', 'trim|required|greater_than['.$_POST['mablagh'].']');
-
-			if ($this->form_validation->run()) {
-				if ($_POST) {
-					date_default_timezone_set("Asia/Tehran");
-					$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-					$id_off =  $_POST['id'];
-					$data['code'] = $_POST['code'];
-					$code = $_POST['code'];
-					$data['mablagh'] = $_POST['mablagh'];
-					$data['start_date'] = $_POST['datetime1'];
-					$data['end_date'] = $_POST['datetime2'];
-					$data['min_price'] = $_POST['min_price'];
-					$data['uses'] = $_POST['uses'];
-					$data['isActive'] = '1';
-					$this->base_model->update('off_code',array('id'=>$id_off) ,$data);
-
-					if($this->base_model->is_inputs_available($id_off, 'id_off', 'off_code_products')
-					||$this->base_model->is_inputs_available('all', 'id_off', 'off_code_products')){
-						$this->base_model->delete_rows_by_col('id_off',$id_off,'off_code_products');
-					}
-					if (!(isset($_POST['products'])) ){
-						$data2['id_product'] = 'all';
-						$data2['id_off'] = $id_off;
-						$data2['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-						$this->base_model->insert('off_code_products' ,$data2);
-					}else {
-						foreach ($_POST['products'] as $x) {
-							$data2['id_product'] = $x;
-							$data2['id_off'] = $id_off;
-							$data2['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-							$this->base_model->insert('off_code_products' ,$data2);
-						}
-					}
-					if($this->base_model->is_inputs_available($id_off, 'id_off', 'off_code_users')
-					||$this->base_model->is_inputs_available($id_off, 'id_off', 'off_code_users')){
-						$this->base_model->delete_rows_by_col('id_off',$id_off,'off_code_users');
-					}
-					if (!(isset($_POST['users'])) ){
-						$data3['id_user'] = 'all';
-						$data3['id_off'] = $id_off;
-						$data3['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-						$this->base_model->insert('off_code_users' ,$data3);
-					}else {
-						foreach ($_POST['users'] as $xx) {
-							$data3['id_user'] = $xx;
-							$data3['id_off'] = $id_off;
-							$data3['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-							$this->base_model->insert('off_code_users' ,$data3);
-						}
-					}
-
-					redirect('admin/edit_off_code/'.$id_off);
-
-				}
-
-			} else {
-				$this->edit_off_code($id_off);
-			}
-		}
-
-	}
-
-	function _edit_unique($x,$y)
-	{
-		$return_value = $this->base_model->check_value('off_code',array('code'=>$x,'id!='=>$y));
-		if ($return_value)
-		{
-			return true;
-		}
-		else
-		{
-			return false;
-		}
-	}
-	public function edit_multi_off(){
-		if ($_POST) {
-			$id = explode(',', $_POST['id']);
-			$id_off = $id;
-			date_default_timezone_set("Asia/Tehran");
-			$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-			if($_POST['mablagh']!=''){
-				$data['mablagh'] = $_POST['mablagh'];}
-			if($_POST['start_date']!=''){
-				$data['start_date'] = $_POST['datetime1'];}
-			if($_POST['end_date']!=''){
-				$data['end_date'] = $_POST['datetime2'];}
-			if($_POST['min_price']!=''){
-				$data['min_price'] = $_POST['min_price'];}
-			if($_POST['uses']!=''){
-				$data['uses'] = $_POST['uses'];}
-			$this->base_model->update_rows_by_col('id',$id,'off_code',$data);
-
-			if($this->base_model->is_inputs_available($id_off, 'id_off', 'off_code_products')){
-				$this->base_model->delete_rows_by_col('id_off',$id_off,'off_code_products');
-			}
-
-			foreach ($_POST['products'] as $x){
-				if($x!=''){
-					$data2['id_product'] = $x;
-					$data2['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-
-					for ($i=0;$i<count($id);$i++){
-						$data2['id_off'] = $id[$i];
-					$this->base_model->insert('off_code_products',$data2);}
-
-				}
-			}
-
-			if ($this->base_model->is_inputs_available($id_off, 'id_off', 'off_code_users')) {
-				$this->base_model->delete_rows_by_col('id_off', $id_off, 'off_code_users');}
-
-			foreach ($_POST['users'] as $xx) {
-				if ($xx != '') {
-					$data3['id_user'] = $xx;
-					$data3['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-
-					for ($i=0;$i<count($id);$i++){
-						$data3['id_off'] = $id[$i];
-						$this->base_model->insert('off_code_users',$data3);}
-
-				}
-			}
-
-		redirect('admin/off_code/');
-		}
-
-
-	}
-
-	/*public function check_orders()
-	{
-		if ($_POST) {
-			$table = $_POST['table'];
-			$column = $_POST['column'];
-			$id = $_POST['id'];
-			if($this->base_model->is_inputs_available($id, $column, $table))
-			{
-				echo 1;
-			}
-			else
-			{
-				echo 0;
-			}
-		}
-	}*/
-	public function check_orders_selected(){
-		if (isset($_POST['ids'])) {
-			$id = explode(',', $_POST['ids']);
-			$orders = $this->base_model->get_datas('shopping_cart_order', '*', 'off_code', $id, NULL, NULL, NULL, NULL, NULL, 'order_code');
-		}
-		$i = 0;
-		if(isset($orders[0])){foreach ($orders as $ord){
-			$data['ord'] = ++$i;
-			$data['off'][$i] = $ord->off_code;
-		}}else{
-			$data['ord'] = 0;
-		}
-		echo json_encode($data);
-	}
-
-	public function delete_off()
-	{
-		if ($_POST) {
-			$id = $_POST['id'];
-			$this->base_model->delete_row('off_code', 'id', $id);
-			echo 1;
-		}
-	}
-
-	public function copy_off_code()
-	{
-
-		$id = $_POST['id'];
-		date_default_timezone_set("Asia/Tehran");
-		$off_code = $this->base_model->get_data('off_code', '*', array('id' => $id));
-
-		if (isset($off_code[0])){
-			$code = $off_code[0]->code;
-		}
-
-//		foreach ($off_code as $off) {
-//			$code=$off->code;
-//		}
-
-		for ($j = 1; $j <1000; $j++) {
-//			$code1 = $code . '-copy(' . $j . ')';
-			$code1 = $code . '(' . $j . ')';
-
-			if ($this->base_model->is_input_unique($code1, 'code', 'off_code')) {
-
-				foreach ($off_code as $off) {
-					$data['created'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-					$data['code'] = $code1;
-					$data['mablagh'] = $off->mablagh;
-					$data['start_date'] = $off->start_date;
-					$data['end_date'] = $off->end_date;
-					$data['isActive'] = $off->isActive;
-					$this->base_model->insert('off_code', $data);
-					echo 1;
-				}
-
-				break;
-
-			}
-
-		}
-
-	}
-	public function delete_off_codes() {
-		if (isset($_POST['ids'])) {
-			$ids = explode(',', $_POST['ids']);
-//			$id_off = $ids;
-			$results = $this->base_model->delete_rows_by_ids($ids,'off_code');
-//			$results2 = $this->base_model->delete_rows_by_ids($id_off,'shopping_cart');
-
-			if ($results === TRUE) {
-				echo '<span style="color:green;">row(s) successfully deleted</span>';
-			} else {
-				echo '<span style="color:red;">Something went wrong during row deletion</span>';
-			}
-		} else {
-			echo '<span style="color:red;">You must select at least one row for deletion</span>';
-		}
-	}
-
-	public function update_off_checkall(){
-		if ($_POST) {
-			$id = explode(',', $_POST['id']);
-			date_default_timezone_set("Asia/Tehran");
-			$data['modified'] = $this->date_j(date('Y-m-d')) . ' ' . date('H:i:s');
-			if($_POST['mablagh']!=''){
-				$data['mablagh'] = $_POST['mablagh'];}
-			if($_POST['start_date']!=''){
-				$data['start_date'] = $_POST['start_date'];}
-			if($_POST['end_date']!=''){
-				$data['end_date'] = $_POST['end_date'];}
-
-			$this->base_model->update_rows_by_col('id',$id,'off_code',$data);
-
-//			if($this->base_model->is_input_available($id, 'id_p', 'shopping_cart')){
-//				$this->base_model->update_rows_by_col('id_p',$id,'shopping_cart',$data2);
-//				echo 2;
-//			}else{
-//				echo 3;
-//			}
-
-
-			echo 1;
-		}
-	}
 
 	public function comments(){
 		$data['title']='نظرات کاربر';

@@ -15,10 +15,12 @@
 					<label>دسته‌بندی:</label>
 					<select id="id_cat" class="form-control">
 						<option value="">— انتخاب کنید —</option>
-						<?php foreach ($categories as $cat): ?>
-							<option value="<?php echo $cat->id; ?>"
-								<?php echo ($cat->id == $product->id_cat) ? 'selected' : ''; ?>>
-								<?php echo ($cat->parentId != '0' ? '&nbsp;&nbsp;&nbsp;&nbsp;└─ ' : '') . htmlspecialchars($cat->name_cat); ?>
+						<?php foreach ($categories as $item):
+							$cat   = $item['node'];
+							$depth = $item['depth'];
+							$prefix = str_repeat('&nbsp;&nbsp;&nbsp;&nbsp;', $depth) . ($depth > 0 ? '└─ ' : '');?>
+							<option value="<?= $cat->id ?>">
+								<?= $prefix . htmlspecialchars($cat->name_cat) ?>
 							</option>
 						<?php endforeach; ?>
 					</select>
@@ -624,6 +626,11 @@
 			e.keyCode == 8)) {
 			return false;
 		}
+	});
+
+	$('#id_cat').select2({
+		placeholder: 'انتخاب دسته...',
+		language: { noResults: function() { return "موردی یافت نشد"; } }
 	});
 
 </script>

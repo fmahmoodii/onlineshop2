@@ -48,7 +48,7 @@
 					<a href="<?php echo base_url()?>admin/brand"><li>برند</li></a>
 					<a href="<?php echo base_url()?>admin/color"><li>رنگ</li></a>
 				</ul>
-				<a href="<?php echo base_url()?>admin/off_code"><li id="off_code">کد تخفیف</li></a>
+				<a href="<?php echo base_url()?>admin/discount_codes"><li id="discount_codes">کد تخفیف</li></a>
 				<a href="<?php echo base_url()?>admin/sales"><li id="sales" >اطلاعات فروش</li></a>
 
 				<a href="<?php echo base_url()?>admin/inventory"><li id="inventory" style="width: 200px;height: 40px;display: flex;

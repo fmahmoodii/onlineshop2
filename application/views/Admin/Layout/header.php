@@ -9,7 +9,10 @@
 	<link href="<?php echo base_url()?>assets/font-awesome/css/font-awesome.min.css" rel="stylesheet" >
 	<link href="<?php echo base_url()?>assets/css/Structure.css" rel="stylesheet" >
 
-
+	<!-- Persian Datepicker -->
+	<link rel="stylesheet" href="https://unpkg.com/persian-datepicker@1.2.0/dist/css/persian-datepicker.min.css">
+	<script src="https://unpkg.com/persian-date@1.1.0/dist/persian-date.min.js"></script>
+	<script src="https://unpkg.com/persian-datepicker@1.2.0/dist/js/persian-datepicker.min.js"></script>
 
 	<script src="<?php echo base_url()?>assets/js/jquery.min.js"></script>
 	<script src="<?php echo base_url()?>assets/js/bootstrap.min.js"></script>
@@ -153,7 +156,7 @@
 		-mox-text-security:disc;
 	}
 
-	#per_data,#inv_sup_data,#inv_attr_data,#inv_data,#attr_data,#ord_data,#prd_data,#cmnt_data,#off_data,#usr_data
+	#per_data,#inv_sup_data,#inv_attr_data,#inv_data,#attr_data,#ord_data,#prd_data,#cmnt_data,#disc_data,#off_data,#usr_data
 	,#size_data,#category1_data,#category2_data,#category_data,#cat-data {
 		font-size: 12px;
 		font-family: IRANSans;

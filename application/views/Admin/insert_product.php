@@ -10,16 +10,15 @@
 				<!-- ✅ دسته‌بندی (جدید - n سطحی) -->
 				<div class="form-group">
 					<label>انتخاب دسته:</label>
-					<select id="id_cat" class="form-control">
+					<select id="id_cat" class="form-control" style="width: 100%">
 						<option value="">— انتخاب کنید —</option>
-						<?php foreach ($categories as $cat): ?>
-							<option value="<?php echo $cat->id; ?>"
-									data-depth="<?php echo $cat->parentId == '0' ? 0 : 1; ?>">
-								<?php
-								// نمایش تورفتگی ساده بر اساس parentId
-								echo ($cat->parentId != '0' ? '&nbsp;&nbsp;&nbsp;&nbsp;└─ ' : '') . htmlspecialchars($cat->name_cat);
-								?>
-							</option>
+						<?php foreach ($categories as $item):
+						$cat   = $item['node'];
+						$depth = $item['depth'];
+						$prefix = str_repeat('&nbsp;&nbsp;&nbsp;&nbsp;', $depth) . ($depth > 0 ? '└─ ' : ''); ?>
+						<option value="<?= $cat->id ?>">
+							<?= $prefix . htmlspecialchars($cat->name_cat) ?>
+						</option>
 						<?php endforeach; ?>
 					</select>
 				</div>
@@ -489,6 +488,11 @@
 
 	$(document).on('change', '#buy_price, #price, #off_percent, #supply', function () {
 		if (parseFloat($(this).val()) < 0) $(this).val(0);
+	});
+
+	$('#id_cat').select2({
+		placeholder: 'انتخاب دسته...',
+		language: { noResults: function() { return "موردی یافت نشد"; } }
 	});
 
 </script>
