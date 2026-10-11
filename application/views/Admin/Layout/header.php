@@ -156,8 +156,9 @@
 		-mox-text-security:disc;
 	}
 
-	#per_data,#inv_sup_data,#inv_attr_data,#inv_data,#attr_data,#ord_data,#prd_data,#cmnt_data,#disc_data,#off_data,#usr_data
-	,#size_data,#category1_data,#category2_data,#category_data,#cat-data {
+	#per_data,#inv_sup_data,#inv_attr_data,#inv_data,#attr_data,#ord_data
+	,#prd_data,#cmnt_data,#disc_data, #usr_data
+	,#size_data,#cat_data {
 		font-size: 12px;
 		font-family: IRANSans;
 		width: 100%;
