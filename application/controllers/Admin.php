@@ -5586,69 +5586,987 @@ class Admin extends CI_Controller
 
 
 
-	public function inventory(){
-		$data['title']='لیست انبار';
-		$data['product_attributes']=$this->base_model->get_data('product_attributes','*');
-		$data['products']=$this->base_model->get_data('products','*');
-		$data['inventory_attrs']=$this->base_model->get_data('inventory_attrs','*');
-		$data['inventory']=$this->base_model->get_data('inventory','*');
+	/**
+	 * ✅ نمایش صفحه لیست انبارها
+	 */
+	public function inventory()
+	{
+		$logged_user_id = $this->session->userdata('id');
+		if (!$logged_user_id) {
+			redirect('admin/login_page');
+			return;
+		}
 
-		$this->load->view('admin/layout/header',$data);
+		if (!$this->base_model->has_permission($logged_user_id, ['view', 'full'], 'inventory')) {
+			$data['title'] = 'دسترسی غیرمجاز';
+			$this->load->view('admin/layout/header', $data);
+			$this->load->view('admin/layout/sidebar');
+			$this->load->view('admin/errors/no_permission');
+			return;
+		}
+
+		$data['action_permissions'] = [
+			'add'    => $this->base_model->has_permission($logged_user_id, ['insert', 'full'], 'inventory'),
+			'edit'   => $this->base_model->has_permission($logged_user_id, ['edit',   'full'], 'inventory'),
+			'delete' => $this->base_model->has_permission($logged_user_id, ['delete', 'full'], 'inventory'),
+		];
+
+		$data['title'] = 'مدیریت انبار';
+		$this->load->view('admin/layout/header', $data);
 		$this->load->view('admin/layout/sidebar');
-		$this->load->view('admin/inventory');
+		$this->load->view('admin/inventory', $data);
 	}
-	public function inventory_list(){
-		$fetch_data = $this->base_model->inventory_make_datatables();
-		$data = array();
-		foreach($fetch_data as $row)
-		{
 
-			$sub_array = array();
-			$sub_array[] = '<input type="checkbox" class="checkall" name="row-check" value="'.$row->id_inv.'" id_inv="'.$row->id_inv.'" ></input> ';
-			$sub_array[] = '<span id="name_'.$row->id_inv.'" style="display: inline-block;width: 100px;white-space: nowrap; overflow: hidden !important;text-overflow: ellipsis;" 
-			title="'.$row->name.'">
-			'.$row->name.'
-			</span>';
-			$sub_array[] = '<span id="details_'.$row->id_inv.'" style="display: inline-block;width: 100px;white-space: nowrap; overflow: hidden !important;text-overflow: ellipsis;" 
-			title="'.$row->details.'">'.$row->details.'</span>';
+	/**
+	 * ✅ لیست انبارها برای DataTable
+	 */
+	public function inventory_list()
+	{
+		$this->check_permission(['view', 'full'], 'inventory');
 
-			$sub_array[] = '<span>'.number_format($row->qty).'</span>';
-			$sub_array[] = $row->created;
-			$sub_array[] = $row->modified;
-			if($row->isActive==0) {$sub_array[] = '<button type="button" id="active" id_inv="'.$row->id_inv.'" class="btn btn-primary btn-xs">فعال سازی</button>';}
-			else if($row->isActive==1){$sub_array[] = '<button type="button" id="deactive" id_inv="'.$row->id_inv.'" class="btn btn-secondary btn-xs">غیرفعال سازی</button>';}
-			$sub_array[] = '<a href="'. base_url('admin/inventory_attrs/').$row->id_inv.'">
-			<button type="button" id="report" id_inv="'.$row->id_inv.'" class="btn btn-info ">
-			<i class="fa fa-list" ></i>
-			</button>
+		$post_data = $this->input->post(NULL, TRUE);
+
+		$columns = [
+			null,
+			'inventory.name',
+			'inventory.details',
+			null, // تعداد کل موجودی (محاسباتی)
+			'inventory.created',
+			'inventory.modified',
+			null, null, null, null, null
+		];
+
+		$result = $this->base_model->datatable(
+			'inventory',
+			$columns,
+			$post_data,
+			'inventory.*',
+			null, null,
+			['inventory.id' => 'DESC']
+		);
+
+		$logged_user_id    = $this->session->userdata('id');
+		$permissions_check = [
+			'edit'   => $this->base_model->has_permission($logged_user_id, ['edit',   'full'], 'inventory'),
+			'delete' => $this->base_model->has_permission($logged_user_id, ['delete', 'full'], 'inventory'),
+		];
+
+		// ✅ گرفتن مجموع موجودی هر انبار یکجا (بدون N+1)
+		$inv_ids   = array_column($result['data'], 'id');
+		$stock_map = [];
+		if (!empty($inv_ids)) {
+			$stocks = $this->base_model->get_data(
+				'inventory_stock', 'inventory_id, qty',
+				null, null, ['inventory_id' => $inv_ids]
+			);
+			foreach ($stocks as $s) {
+				$stock_map[$s->inventory_id] = ($stock_map[$s->inventory_id] ?? 0) + $s->qty;
+			}
+		}
+
+		$data = [];
+		foreach ($result['data'] as $row) {
+			$sub_array = [];
+
+			$sub_array[] = '<input type="checkbox" name="row-check" inv_id="' . $row->id . '">';
+
+			$sub_array[] = '<span id="name_' . $row->id . '" style="display:inline-block;width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' . htmlspecialchars($row->name) . '">'
+				. htmlspecialchars($row->name) . '</span>';
+
+			$sub_array[] = '<span id="details_' . $row->id . '" style="display:inline-block;width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' . htmlspecialchars($row->details ?? '') . '">'
+				. htmlspecialchars($row->details ?? '—') . '</span>';
+
+			// ✅ مجموع موجودی این انبار
+			$total_qty   = $stock_map[$row->id] ?? 0;
+			$sub_array[] = number_format($total_qty);
+
+			$sub_array[] = htmlspecialchars($row->created);
+			$sub_array[] = htmlspecialchars($row->modified);
+
+			// وضعیت
+			$sub_array[] = ($row->isActive == 0)
+				? '<button class="btn btn-primary btn-xs toggle_inv_status" inv_id="' . $row->id . '" data-status="1"
+					' . ($permissions_check['edit'] ? '' : 'data-no-permission="true"') . '>فعالسازی</button>'
+				: '<button class="btn btn-secondary btn-xs toggle_inv_status" inv_id="' . $row->id . '" data-status="0"
+					' . ($permissions_check['edit'] ? '' : 'data-no-permission="true"') . '>غیرفعالسازی</button>';
+
+			// گزارش (ورود/خروج)
+			$sub_array[] = '<a href="' . base_url('admin/inventory_transactions/' . $row->id) . '">
+				<button class="btn btn-info btn-xs"><i class="fa fa-list"></i></button>
 			</a>';
-			$sub_array[] = '<a href="'. base_url('admin/inventory_supply/').$row->id_inv.'">
-			<button type="button" id="supply" id_inv="'.$row->id_inv.'" class="btn btn-primary ">
-			<i class="fa fa-cube" ></i>
-			</button>
+
+			// موجودی کالا
+			$sub_array[] = '<a href="' . base_url('admin/inventory_stock/' . $row->id) . '">
+				<button class="btn btn-primary btn-xs"><i class="fa fa-cube"></i></button>
 			</a>';
-			$sub_array[] = '
-			<button type="button" id="edit" id_inv="'.$row->id_inv.'" class="btn btn-warning ">
-			<i class="fa fa-edit" ></i>
-			</button>
-			';
-			$sub_array[] = '<button type="button" id="delete" id_inv="'.$row->id_inv.'" class="btn btn-danger">
-			<i class="fa fa-trash" ></i>
+
+			// ویرایش
+			$sub_array[] = '<button class="btn btn-warning btn-xs edit_inv" inv_id="' . $row->id . '"
+				' . ($permissions_check['edit'] ? '' : 'data-no-permission="true"') . '>
+				<i class="fa fa-edit fa-lg"></i>
+			</button>';
+
+			// حذف
+			$sub_array[] = '<button class="btn btn-danger btn-xs delete_inv" inv_id="' . $row->id . '"
+				' . ($permissions_check['delete'] ? '' : 'data-no-permission="true"') . '>
+				<i class="fa fa-trash fa-lg"></i>
 			</button>';
 
 			$data[] = $sub_array;
 		}
-		$output = array(
-			"draw"                    =>     intval($_POST["draw"]),
-			"recordsTotal"          =>      $this->base_model->inventory_get_all_data(),
-			"recordsFiltered"     =>     $this->base_model->inventory_get_filtered_data(),
-			"data"                    =>     $data
+
+		echo json_encode([
+			'draw'            => isset($post_data['draw']) ? intval($post_data['draw']) : 0,
+			'recordsTotal'    => $result['recordsTotal'],
+			'recordsFiltered' => $result['recordsFiltered'],
+			'data'            => $data
+		]);
+	}
+
+	/**
+	 * ✅ افزودن انبار جدید
+	 */
+	public function insert_inv()
+	{
+		$this->check_permission(['insert', 'full'], 'inventory');
+
+		if (!$this->input->post()) {
+			redirect('admin/inventory');
+			return;
+		}
+
+		$this->load->library('form_validation');
+		$this->load->helper('form');
+
+		$this->form_validation->set_message('required', 'فیلد الزامی است');
+		$this->form_validation->set_rules('name',    'نام انبار',  'trim|required|max_length[255]|callback__check_inv_name_unique');
+		$this->form_validation->set_rules('details', 'توضیحات',    'trim|max_length[255]');
+
+		if ($this->form_validation->run()) {
+			$now  = date('Y-m-d H:i:s');
+			$data = [
+				'name'     => $this->input->post('name',    TRUE),
+				'details'  => $this->input->post('details', TRUE) ?: NULL,
+				'isActive' => 1,
+				'created'  => $now,
+				'modified' => $now
+			];
+
+			$new_id = $this->base_model->insert_data('inventory', $data);
+
+			if ($new_id) {
+				$this->base_model->add_log(
+					'inventory', $new_id, 'insert', null, $data,
+					'افزودن انبار: ' . $data['name'],
+					uniqid('grp_', true), 'افزودن انبار'
+				);
+				$this->session->set_flashdata('success', 'انبار با موفقیت افزوده شد');
+			}
+
+			redirect('admin/inventory');
+
+		} else {
+			$this->inventory();
+		}
+	}
+
+	/**
+	 * ✅ ویرایش انبار
+	 */
+	public function edit_inv()
+	{
+		$this->check_permission(['edit', 'full'], 'inventory');
+
+		if (!$this->input->post()) {
+			redirect('admin/inventory');
+			return;
+		}
+
+		$this->load->library('form_validation');
+		$this->load->helper('form');
+
+		$id = $this->input->post('id_modal', TRUE);
+		if (!$id) { redirect('admin/inventory'); return; }
+
+		$this->form_validation->set_message('required', 'فیلد الزامی است');
+		$this->form_validation->set_rules('name_modal',    'نام انبار', 'trim|required|max_length[255]|callback__check_inv_name_edit[' . $id . ']');
+		$this->form_validation->set_rules('details_modal', 'توضیحات',   'trim|max_length[255]');
+
+		if ($this->form_validation->run()) {
+			$old = $this->base_model->get_data('inventory', '*', ['id' => $id]);
+			if (empty($old)) { redirect('admin/inventory'); return; }
+			$old = $old[0];
+
+			$now      = date('Y-m-d H:i:s');
+			$new_data = [
+				'name'     => $this->input->post('name_modal',    TRUE),
+				'details'  => $this->input->post('details_modal', TRUE) ?: NULL,
+				'modified' => $now
+			];
+
+			$this->base_model->update_data('inventory', $new_data, ['id' => $id]);
+
+			$diff_old = $diff_new = [];
+			foreach ($new_data as $k => $v) {
+				if ($k === 'modified') continue;
+				if ((string)$old->$k !== (string)$v) {
+					$diff_old[$k] = $old->$k;
+					$diff_new[$k] = $v;
+				}
+			}
+			if (!empty($diff_old)) {
+				$this->base_model->add_log(
+					'inventory', $id, 'update', $diff_old, $diff_new,
+					'ویرایش انبار: ' . $new_data['name'],
+					uniqid('grp_', true), 'ویرایش انبار'
+				);
+			}
+
+			$this->session->set_flashdata('success', 'انبار با موفقیت ویرایش شد');
+			redirect('admin/inventory');
+
+		} else {
+			$this->inventory();
+		}
+	}
+
+	/**
+	 * ✅ فعال/غیرفعال کردن انبار (تکی و گروهی)
+	 */
+	public function toggle_inventory_status()
+	{
+		$this->check_permission(['edit', 'full'], 'inventory');
+
+		$inv_ids = $this->input->post('inv_ids', TRUE);
+		$status  = intval($this->input->post('status', TRUE));
+
+		if (empty($inv_ids)) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$inv_ids = (array)$inv_ids;
+		$before  = $this->base_model->get_data('inventory', '*', null, null, ['id' => $inv_ids]);
+		if (empty($before)) {
+			echo json_encode(['status' => 0, 'message' => 'انبار یافت نشد']);
+			return;
+		}
+
+		$batch = [];
+		foreach ($before as $inv) {
+			$batch[] = ['id' => $inv->id, 'isActive' => $status];
+		}
+		$this->base_model->update_data('inventory', $batch, null, true, 'id');
+
+		$group_id = uniqid('grp_', true);
+		foreach ($before as $inv) {
+			$this->base_model->add_log(
+				'inventory', $inv->id, 'update_status',
+				['isActive' => $inv->isActive], ['isActive' => $status],
+				($status ? 'فعالسازی' : 'غیرفعالسازی') . ' انبار: ' . $inv->name,
+				$group_id, 'تغییر وضعیت انبار'
+			);
+		}
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ حذف نرم انبار
+	 */
+	public function delete_inv()
+	{
+		$this->check_permission(['delete', 'full'], 'inventory');
+
+		$inv_ids = $this->input->post('inv_ids', TRUE);
+		if (empty($inv_ids)) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+		$inv_ids = (array)$inv_ids;
+
+		// ✅ چک اینکه انبار موجودی داشته باشه
+		$has_stock = $this->base_model->get_data(
+			'inventory_stock', 'inventory_id',
+			null, null, ['inventory_id' => $inv_ids]
 		);
-		echo json_encode($output);
+
+		if (!empty($has_stock)) {
+			echo json_encode([
+				'status'  => 0,
+				'message' => 'انبار دارای موجودی است. ابتدا موجودی را به انبار دیگری منتقل کنید'
+			]);
+			return;
+		}
+
+		$before = $this->base_model->get_data('inventory', '*', null, null, ['id' => $inv_ids]);
+		if (empty($before)) {
+			echo json_encode(['status' => 0, 'message' => 'انبار یافت نشد']);
+			return;
+		}
+
+		$this->base_model->soft_delete('inventory', $inv_ids, true, 'id');
+
+		$group_id = uniqid('grp_', true);
+		foreach ($before as $inv) {
+			$this->base_model->add_log(
+				'inventory', $inv->id, 'soft_delete',
+				(array)$inv, null,
+				'حذف انبار: ' . $inv->name,
+				$group_id, 'حذف انبار'
+			);
+		}
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ چک real-time یکتا بودن نام انبار (insert)
+	 */
+	public function check_inv_name()
+	{
+		$name = trim($this->input->post('name', TRUE));
+		if (empty($name)) { echo ''; return; }
+
+		$exists = $this->base_model->get_data('inventory', 'id', ['name' => $name]);
+		echo !empty($exists)
+			? '<label class="text-danger"><i class="fa fa-times"></i> این نام قبلاً ثبت شده است</label>'
+			: '<label class="text-success"><i class="fa fa-check"></i> قابل قبول است</label>';
+	}
+
+	/**
+	 * ✅ چک real-time یکتا بودن نام انبار (edit)
+	 */
+	public function check_inv_name_edit()
+	{
+		$name = trim($this->input->post('name', TRUE));
+		$id   = $this->input->post('id',   TRUE);
+		if (empty($name)) { echo ''; return; }
+
+		$exists = $this->base_model->get_data(
+			'inventory', 'id', ['name' => $name],
+			null, null, ['id' => [$id]]
+		);
+		echo !empty($exists)
+			? '<label class="text-danger"><i class="fa fa-times"></i> این نام قبلاً ثبت شده است</label>'
+			: '<label class="text-success"><i class="fa fa-check"></i> قابل قبول است</label>';
+	}
+
+	/**
+	 * ✅ callback validation — یکتایی نام برای insert
+	 */
+	public function _check_inv_name_unique($name)
+	{
+		$exists = $this->base_model->get_data('inventory', 'id', ['name' => trim($name)]);
+		if (!empty($exists)) {
+			$this->form_validation->set_message('_check_inv_name_unique', 'این نام انبار قبلاً ثبت شده است');
+			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * ✅ callback validation — یکتایی نام برای edit
+	 */
+	public function _check_inv_name_edit($name, $id)
+	{
+		$exists = $this->base_model->get_data(
+			'inventory', 'id', ['name' => trim($name)],
+			null, null, ['id' => [$id]]
+		);
+		if (!empty($exists)) {
+			$this->form_validation->set_message('_check_inv_name_edit', 'این نام انبار قبلاً ثبت شده است');
+			return false;
+		}
+		return true;
 	}
 
 
-	public function insert_inv(){
+
+
+	/**
+	 * ✅ نمایش صفحه موجودی یک انبار
+	 */
+	public function inventory_stock($inv_id = null)
+	{
+		$logged_user_id = $this->session->userdata('id');
+		if (!$logged_user_id) { redirect('admin/login_page'); return; }
+
+		if (!$this->base_model->has_permission($logged_user_id, ['view', 'full'], 'inventory')) {
+			$data['title'] = 'دسترسی غیرمجاز';
+			$this->load->view('admin/layout/header', $data);
+			$this->load->view('admin/layout/sidebar');
+			$this->load->view('admin/errors/no_permission');
+			return;
+		}
+
+		if (!$inv_id) { redirect('admin/inventory'); return; }
+
+		$inventory = $this->base_model->get_data('inventory', '*', ['id' => $inv_id]);
+		if (empty($inventory)) { redirect('admin/inventory'); return; }
+
+		$data['action_permissions'] = [
+			'add'    => $this->base_model->has_permission($logged_user_id, ['insert', 'full'], 'inventory'),
+			'edit'   => $this->base_model->has_permission($logged_user_id, ['edit',   'full'], 'inventory'),
+			'delete' => $this->base_model->has_permission($logged_user_id, ['delete', 'full'], 'inventory'),
+		];
+
+		// ✅ لیست محصولات برای مودال افزودن
+		$data['products']    = $this->base_model->get_data('products', 'id, name, code', ['isActive' => 1]);
+		$data['attributes']  = $this->base_model->get_data('product_attributes', '*', ['isActive' => 1]);
+		$data['model']       = $this->base_model->get_data('model',  'id, name');
+		$data['jens']        = $this->base_model->get_data('jens',   'id, name');
+		$data['size']        = $this->base_model->get_data('size',   'id, name');
+		$data['brand']       = $this->base_model->get_data('brand',  'id, name');
+		$data['color']       = $this->base_model->get_data('color',  'id, name, color_code');
+
+		$data['inventory'] = $inventory[0];
+		$data['inv_id']    = $inv_id;
+		$data['title']     = 'موجودی انبار: ' . $inventory[0]->name;
+
+		$this->load->view('admin/layout/header', $data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/inventory_stock', $data);
+	}
+
+	/**
+	 * ✅ لیست موجودی انبار برای DataTable
+	 */
+	public function inventory_stock_list($inv_id = null)
+	{
+		$this->check_permission(['view', 'full'], 'inventory');
+
+		if (!$inv_id) { echo json_encode(['data' => []]); return; }
+
+		$post_data = $this->input->post(NULL, TRUE);
+
+		$columns = [
+			null,
+			'products.code',
+			'products.name',
+			'inventory_stock.qty',
+			'inventory_stock.modified',
+			null, null, null
+		];
+
+		$result = $this->base_model->datatable(
+			'inventory_stock',
+			$columns,
+			$post_data,
+			'inventory_stock.id,
+			 inventory_stock.attr_id,
+			 inventory_stock.qty,
+			 inventory_stock.modified,
+			 products.name,
+			 products.code,
+			 product_attributes.price,
+			 product_attributes.model,
+			 product_attributes.jens,
+			 product_attributes.size,
+			 product_attributes.brand,
+			 product_attributes.color',
+			[
+				'product_attributes' => 'product_attributes.id = inventory_stock.attr_id',
+				'products'           => 'products.code = product_attributes.code_p'
+			],
+			['inventory_stock.inventory_id' => $inv_id]
+		);
+
+		// ✅ lookup maps بدون N+1
+		$model_map = $jens_map = $size_map = $brand_map = $color_map = [];
+		foreach ($this->base_model->get_data('model', 'id, name') as $r)  { $model_map[$r->id] = $r->name; }
+		foreach ($this->base_model->get_data('jens',  'id, name') as $r)  { $jens_map[$r->id]  = $r->name; }
+		foreach ($this->base_model->get_data('size',  'id, name') as $r)  { $size_map[$r->id]  = $r->name; }
+		foreach ($this->base_model->get_data('brand', 'id, name') as $r)  { $brand_map[$r->id] = $r->name; }
+		foreach ($this->base_model->get_data('color', 'id, name, color_code') as $r) {
+			$color_map[$r->id] = ['name' => $r->name, 'code' => $r->color_code];
+		}
+
+		$logged_user_id    = $this->session->userdata('id');
+		$permissions_check = [
+			'edit'   => $this->base_model->has_permission($logged_user_id, ['edit',   'full'], 'inventory'),
+			'delete' => $this->base_model->has_permission($logged_user_id, ['delete', 'full'], 'inventory'),
+		];
+
+		$data = [];
+		foreach ($result['data'] as $row) {
+			$sub_array = [];
+
+			$sub_array[] = '<input type="checkbox" name="row-check" attr_id="' . $row->attr_id . '">';
+
+			// کد کالا
+			$sub_array[] = htmlspecialchars($row->code ?? '—');
+
+			// نام کالا + مشخصات
+			$attrs = [];
+			if (!empty($row->model) && isset($model_map[$row->model])) $attrs[] = 'مدل: ' . $model_map[$row->model];
+			if (!empty($row->jens)  && isset($jens_map[$row->jens]))   $attrs[] = 'جنس: ' . $jens_map[$row->jens];
+			if (!empty($row->size)  && isset($size_map[$row->size]))   $attrs[] = 'سایز: ' . $size_map[$row->size];
+			if (!empty($row->brand) && isset($brand_map[$row->brand])) $attrs[] = 'برند: ' . $brand_map[$row->brand];
+			if (!empty($row->color) && isset($color_map[$row->color])) {
+				$cc = $color_map[$row->color];
+				$attrs[] = 'رنگ: <span style="height:12px;width:12px;border-radius:50%;display:inline-block;background:' . $cc['code'] . ';border:1px solid #000;"></span> ' . $cc['name'];
+			}
+			$label = htmlspecialchars($row->name ?? '');
+			if (!empty($attrs)) $label .= ' <small class="text-muted">(' . implode(' - ', $attrs) . ')</small>';
+			$sub_array[] = $label;
+
+			// موجودی
+			$qty_color   = $row->qty <= 0 ? 'color:red' : ($row->qty <= 5 ? 'color:orange' : '');
+			$sub_array[] = '<span style="' . $qty_color . '">' . number_format($row->qty) . '</span>';
+
+			// آخرین تغییر
+			$sub_array[] = htmlspecialchars($row->modified);
+
+			// دکمه ورود
+			$sub_array[] = '<button class="btn btn-success btn-xs stock_in" attr_id="' . $row->attr_id . '"
+				' . ($permissions_check['edit'] ? '' : 'data-no-permission="true"') . '>
+				<i class="fa fa-plus"></i> ورود
+			</button>';
+
+			// دکمه خروج
+			$sub_array[] = '<button class="btn btn-warning btn-xs stock_out" attr_id="' . $row->attr_id . '"
+				' . ($permissions_check['edit'] ? '' : 'data-no-permission="true"') . '>
+				<i class="fa fa-minus"></i> خروج
+			</button>';
+
+			// تاریخچه
+			$sub_array[] = '<a href="' . base_url('admin/inventory_transactions/' . $inv_id . '/' . $row->attr_id) . '">
+				<button class="btn btn-info btn-xs"><i class="fa fa-list"></i></button>
+			</a>';
+
+			$data[] = $sub_array;
+		}
+
+		echo json_encode([
+			'draw'            => isset($post_data['draw']) ? intval($post_data['draw']) : 0,
+			'recordsTotal'    => $result['recordsTotal'],
+			'recordsFiltered' => $result['recordsFiltered'],
+			'data'            => $data
+		]);
+	}
+
+	/**
+	 * ✅ افزودن کالا به انبار (transaction ورودی + آپدیت stock)
+	 */
+	public function add_stock()
+	{
+		$this->check_permission(['insert', 'full'], 'inventory');
+
+		$inv_id    = $this->input->post('inv_id',    TRUE);
+		$attr_id   = $this->input->post('attr_id',   TRUE);
+		$qty       = intval($this->input->post('qty', TRUE));
+		$reference = $this->input->post('reference', TRUE) ?: 'purchase';
+		$desc      = $this->input->post('description', TRUE) ?: NULL;
+
+		if (!$inv_id || !$attr_id || $qty <= 0) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$valid_refs = ['purchase', 'return', 'transfer', 'adjustment', 'initial'];
+		if (!in_array($reference, $valid_refs)) {
+			echo json_encode(['status' => 0, 'message' => 'نوع تراکنش نامعتبر است']);
+			return;
+		}
+
+		$now = date('Y-m-d H:i:s');
+		$logged_user_id = $this->session->userdata('id');
+
+		$this->db->trans_start();
+
+		// ✅ ثبت transaction
+		$this->base_model->insert_data('inventory_transactions', [
+			'inventory_id'   => $inv_id,
+			'attr_id'        => $attr_id,
+			'type'           => 'in',
+			'reference'      => $reference,
+			'qty'            => $qty,
+			'description'    => $desc,
+			'created'        => $now,
+			'created_by'     => $logged_user_id
+		]);
+
+		// ✅ آپدیت یا insert stock
+		$existing = $this->base_model->get_data('inventory_stock', '*', [
+			'inventory_id' => $inv_id,
+			'attr_id'      => $attr_id
+		]);
+
+		if (!empty($existing)) {
+			$new_qty = $existing[0]->qty + $qty;
+			$this->base_model->update_data('inventory_stock',
+				['qty' => $new_qty, 'modified' => $now],
+				['inventory_id' => $inv_id, 'attr_id' => $attr_id]
+			);
+		} else {
+			$this->base_model->insert_data('inventory_stock', [
+				'inventory_id' => $inv_id,
+				'attr_id'      => $attr_id,
+				'qty'          => $qty,
+				'modified'     => $now
+			]);
+		}
+
+		// ✅ sync با product_attributes.supply
+		$total_stock = $this->base_model->get_data(
+			'inventory_stock', 'qty',
+			null, null, ['attr_id' => [$attr_id]]
+		);
+		$total_qty = array_sum(array_column($total_stock, 'qty'));
+		$this->base_model->update_data('product_attributes',
+			['supply' => $total_qty, 'modified' => $now],
+			['id' => $attr_id]
+		);
+
+		$this->db->trans_complete();
+
+		if ($this->db->trans_status() === FALSE) {
+			echo json_encode(['status' => 0, 'message' => 'خطا در ثبت ورودی']);
+			return;
+		}
+
+		echo json_encode(['status' => 1]);
+	}
+
+	/**
+	 * ✅ خروج کالا از انبار (transaction خروجی + آپدیت stock)
+	 */
+	public function remove_stock()
+	{
+		$this->check_permission(['edit', 'full'], 'inventory');
+
+		$inv_id    = $this->input->post('inv_id',    TRUE);
+		$attr_id   = $this->input->post('attr_id',   TRUE);
+		$qty       = intval($this->input->post('qty', TRUE));
+		$reference = $this->input->post('reference', TRUE) ?: 'sale';
+		$desc      = $this->input->post('description', TRUE) ?: NULL;
+
+		if (!$inv_id || !$attr_id || $qty <= 0) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$valid_refs = ['sale', 'transfer', 'adjustment', 'return'];
+		if (!in_array($reference, $valid_refs)) {
+			echo json_encode(['status' => 0, 'message' => 'نوع تراکنش نامعتبر است']);
+			return;
+		}
+
+		// ✅ چک موجودی کافی
+		$stock = $this->base_model->get_data('inventory_stock', '*', [
+			'inventory_id' => $inv_id,
+			'attr_id'      => $attr_id
+		]);
+
+		if (empty($stock) || $stock[0]->qty < $qty) {
+			echo json_encode(['status' => 0, 'message' => 'موجودی کافی نیست']);
+			return;
+		}
+
+		$now            = date('Y-m-d H:i:s');
+		$logged_user_id = $this->session->userdata('id');
+		$new_qty        = $stock[0]->qty - $qty;
+
+		$this->db->trans_start();
+
+		// ✅ ثبت transaction
+		$this->base_model->insert_data('inventory_transactions', [
+			'inventory_id' => $inv_id,
+			'attr_id'      => $attr_id,
+			'type'         => 'out',
+			'reference'    => $reference,
+			'qty'          => $qty,
+			'description'  => $desc,
+			'created'      => $now,
+			'created_by'   => $logged_user_id
+		]);
+
+		// ✅ آپدیت stock
+		$this->base_model->update_data('inventory_stock',
+			['qty' => $new_qty, 'modified' => $now],
+			['inventory_id' => $inv_id, 'attr_id' => $attr_id]
+		);
+
+		// ✅ sync با product_attributes.supply
+		$total_stock = $this->base_model->get_data(
+			'inventory_stock', 'qty',
+			null, null, ['attr_id' => [$attr_id]]
+		);
+		$total_qty = array_sum(array_column($total_stock, 'qty'));
+		$this->base_model->update_data('product_attributes',
+			['supply' => $total_qty, 'modified' => $now],
+			['id' => $attr_id]
+		);
+
+		$this->db->trans_complete();
+
+		if ($this->db->trans_status() === FALSE) {
+			echo json_encode(['status' => 0, 'message' => 'خطا در ثبت خروجی']);
+			return;
+		}
+
+		echo json_encode(['status' => 1, 'new_qty' => $new_qty]);
+	}
+
+	/**
+	 * ✅ تعدیل مستقیم موجودی (adjustment)
+	 */
+	public function adjust_stock()
+	{
+		$this->check_permission(['edit', 'full'], 'inventory');
+
+		$inv_id  = $this->input->post('inv_id',   TRUE);
+		$attr_id = $this->input->post('attr_id',  TRUE);
+		$new_qty = intval($this->input->post('qty', TRUE));
+		$desc    = $this->input->post('description', TRUE) ?: 'تعدیل موجودی';
+
+		if (!$inv_id || !$attr_id || $new_qty < 0) {
+			echo json_encode(['status' => 0, 'message' => 'داده نامعتبر است']);
+			return;
+		}
+
+		$stock = $this->base_model->get_data('inventory_stock', '*', [
+			'inventory_id' => $inv_id,
+			'attr_id'      => $attr_id
+		]);
+
+		$current_qty    = !empty($stock) ? $stock[0]->qty : 0;
+		$diff           = $new_qty - $current_qty;
+		$now            = date('Y-m-d H:i:s');
+		$logged_user_id = $this->session->userdata('id');
+
+		$this->db->trans_start();
+
+		// ✅ ثبت transaction فقط اگه تغییری بوده
+		if ($diff !== 0) {
+			$this->base_model->insert_data('inventory_transactions', [
+				'inventory_id' => $inv_id,
+				'attr_id'      => $attr_id,
+				'type'         => $diff > 0 ? 'in' : 'out',
+				'reference'    => 'adjustment',
+				'qty'          => abs($diff),
+				'description'  => $desc,
+				'created'      => $now,
+				'created_by'   => $logged_user_id
+			]);
+		}
+
+		// ✅ آپدیت یا insert stock
+		if (!empty($stock)) {
+			$this->base_model->update_data('inventory_stock',
+				['qty' => $new_qty, 'modified' => $now],
+				['inventory_id' => $inv_id, 'attr_id' => $attr_id]
+			);
+		} else {
+			$this->base_model->insert_data('inventory_stock', [
+				'inventory_id' => $inv_id,
+				'attr_id'      => $attr_id,
+				'qty'          => $new_qty,
+				'modified'     => $now
+			]);
+		}
+
+		// ✅ sync با product_attributes.supply
+		$total_stock = $this->base_model->get_data(
+			'inventory_stock', 'qty',
+			null, null, ['attr_id' => [$attr_id]]
+		);
+		$total_qty = array_sum(array_column($total_stock, 'qty'));
+		$this->base_model->update_data('product_attributes',
+			['supply' => $total_qty, 'modified' => $now],
+			['id' => $attr_id]
+		);
+
+		$this->db->trans_complete();
+
+		if ($this->db->trans_status() === FALSE) {
+			echo json_encode(['status' => 0, 'message' => 'خطا در تعدیل موجودی']);
+			return;
+		}
+
+		echo json_encode(['status' => 1, 'new_qty' => $new_qty]);
+	}
+
+
+
+
+	/**
+	 * ✅ نمایش صفحه تاریخچه ورود/خروج
+	 * $inv_id: اگه null باشه همه انبارها، وگرنه فقط یه انبار
+	 * $attr_id: اگه null باشه همه کالاها، وگرنه فقط یه کالا
+	 */
+	public function inventory_transactions($inv_id = null, $attr_id = null)
+	{
+		$logged_user_id = $this->session->userdata('id');
+		if (!$logged_user_id) { redirect('admin/login_page'); return; }
+
+		if (!$this->base_model->has_permission($logged_user_id, ['view', 'full'], 'inventory')) {
+			$data['title'] = 'دسترسی غیرمجاز';
+			$this->load->view('admin/layout/header', $data);
+			$this->load->view('admin/layout/sidebar');
+			$this->load->view('admin/errors/no_permission');
+			return;
+		}
+
+		// ✅ اطلاعات انبار (برای breadcrumb و فیلتر)
+		if ($inv_id) {
+			$inventory = $this->base_model->get_data('inventory', '*', ['id' => $inv_id]);
+			if (empty($inventory)) { redirect('admin/inventory'); return; }
+			$data['inventory'] = $inventory[0];
+		} else {
+			$data['inventory'] = null;
+		}
+
+		// ✅ اطلاعات کالا (برای breadcrumb)
+		if ($attr_id) {
+			$attr = $this->base_model->get_data('product_attributes', '*', ['id' => $attr_id]);
+			if (!empty($attr)) {
+				$product = $this->base_model->get_data('products', 'name, code', ['code' => $attr[0]->code_p]);
+				$data['attr']    = $attr[0];
+				$data['product'] = !empty($product) ? $product[0] : null;
+			}
+		} else {
+			$data['attr']    = null;
+			$data['product'] = null;
+		}
+
+		$data['inv_id']  = $inv_id;
+		$data['attr_id'] = $attr_id;
+		$data['title']   = 'تاریخچه ورود/خروج';
+
+		$this->load->view('admin/layout/header', $data);
+		$this->load->view('admin/layout/sidebar');
+		$this->load->view('admin/inventory_transactions', $data);
+	}
+
+	/**
+	 * ✅ لیست تراکنش‌ها برای DataTable
+	 */
+	public function inventory_transactions_list()
+	{
+		$this->check_permission(['view', 'full'], 'inventory');
+
+		$post_data = $this->input->post(NULL, TRUE);
+		$inv_id    = $this->input->post('inv_id',  TRUE) ?: null;
+		$attr_id   = $this->input->post('attr_id', TRUE) ?: null;
+
+		$columns = [
+			'inventory_transactions.id',
+			'inventory.name',
+			'products.name',
+			'inventory_transactions.type',
+			'inventory_transactions.reference',
+			'inventory_transactions.qty',
+			'inventory_transactions.description',
+			'inventory_transactions.created',
+			null // ثبت‌کننده
+		];
+
+		$where = [];
+		if ($inv_id)  $where['inventory_transactions.inventory_id'] = $inv_id;
+		if ($attr_id) $where['inventory_transactions.attr_id']      = $attr_id;
+
+		$result = $this->base_model->datatable(
+			'inventory_transactions',
+			$columns,
+			$post_data,
+			'inventory_transactions.*,
+			 inventory.name AS inv_name,
+			 products.name  AS prod_name,
+			 products.code  AS prod_code,
+			 users.phone_number AS creator_phone,
+			 profile.name   AS creator_name,
+			 profile.family AS creator_family',
+			[
+				'inventory'          => 'inventory.id = inventory_transactions.inventory_id',
+				'product_attributes' => 'product_attributes.id = inventory_transactions.attr_id',
+				'products'           => 'products.code = product_attributes.code_p',
+				'users'              => 'users.id = inventory_transactions.created_by',
+				'profile'            => 'profile.user_id = inventory_transactions.created_by'
+			],
+			!empty($where) ? $where : null,
+			['inventory_transactions.id' => 'DESC']
+		);
+
+		$reference_labels = [
+			'purchase'   => '<span class="label label-info">خرید</span>',
+			'sale'       => '<span class="label label-primary">فروش</span>',
+			'transfer'   => '<span class="label label-default">جابجایی</span>',
+			'adjustment' => '<span class="label label-warning">تعدیل</span>',
+			'return'     => '<span class="label label-danger">مرجوعی</span>',
+			'initial'    => '<span class="label label-success">اولیه</span>',
+		];
+
+		$data = [];
+		foreach ($result['data'] as $row) {
+			$sub_array = [];
+
+			// شناسه تراکنش
+			$sub_array[] = '#' . $row->id;
+
+			// انبار
+			$sub_array[] = htmlspecialchars($row->inv_name ?? '—');
+
+			// نام کالا
+			$sub_array[] = '<span style="display:inline-block;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' . htmlspecialchars($row->prod_name ?? '') . '">'
+				. htmlspecialchars($row->prod_name ?? '—') . '</span>';
+
+			// نوع (ورود/خروج)
+			$sub_array[] = ($row->type === 'in')
+				? '<span class="label label-success"><i class="fa fa-arrow-down"></i> ورود</span>'
+				: '<span class="label label-danger"><i class="fa fa-arrow-up"></i> خروج</span>';
+
+			// نوع تراکنش
+			$sub_array[] = $reference_labels[$row->reference] ?? htmlspecialchars($row->reference);
+
+			// تعداد
+			$sub_array[] = '<strong>' . number_format($row->qty) . '</strong>';
+
+			// توضیحات
+			$sub_array[] = htmlspecialchars($row->description ?? '—');
+
+			// تاریخ
+			$sub_array[] = htmlspecialchars($row->created);
+
+			// ثبت‌کننده
+			$creator = trim(($row->creator_name ?? '') . ' ' . ($row->creator_family ?? ''));
+			$sub_array[] = $creator ?: htmlspecialchars($row->creator_phone ?? '—');
+
+			$data[] = $sub_array;
+		}
+
+		echo json_encode([
+			'draw'            => isset($post_data['draw']) ? intval($post_data['draw']) : 0,
+			'recordsTotal'    => $result['recordsTotal'],
+			'recordsFiltered' => $result['recordsFiltered'],
+			'data'            => $data
+		]);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	/*public function insert_inv(){
 
 		if ($_POST) {
 			$this->load->library('form_validation');
@@ -5683,7 +6601,7 @@ class Admin extends CI_Controller
 			}
 		}
 
-	}
+	}*/
 
 	function search_name()
 	{
@@ -5725,7 +6643,7 @@ class Admin extends CI_Controller
 	}
 
 
-	public function edit_inv(){
+	/*public function edit_inv(){
 
 		if ($_POST) {
 			$this->load->library('form_validation');
@@ -5762,7 +6680,7 @@ class Admin extends CI_Controller
 			}
 		}
 
-	}
+	}*/
 
 	function _edit_unique_name($x,$y)
 	{
