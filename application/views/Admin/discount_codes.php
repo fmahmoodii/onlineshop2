@@ -16,9 +16,17 @@
 				</button>
 			<?php endif; ?>
 
-			<button id="delete_selected" class="btn btn-danger btn-sm ml-3" style="outline:none">
-				<i class="fa fa-trash"></i> حذف انتخاب‌شده‌ها
-			</button>
+			<?php if (!empty($action_permissions['edit']) && $action_permissions['edit']): ?>
+				<button id="active_selected"   class="btn btn-primary btn-sm ml-3">فعال سازی همه</button>
+				<button id="deactive_selected" class="btn btn-secondary btn-sm ml-3">غیرفعال سازی همه</button>
+				<button id="update_selected"   class="btn btn-warning btn-sm ml-3">ویرایش همه</button>
+			<?php endif; ?>
+
+			<?php if (!empty($action_permissions['delete']) && $action_permissions['delete']): ?>
+				<button id="delete_selected" class="btn btn-danger btn-sm ml-3" style="outline:none">
+					<i class="fa fa-trash"></i> حذف همه
+				</button>
+			<?php endif; ?>
 		</div>
 
 		<br><br><br>
@@ -132,7 +140,15 @@
 		}
 	}
 
-	// ================== فعال/غیرفعال ==================
+	function getSelectedIds() {
+		var ids = [];
+		$("input[name='row-check']:checked").each(function () {
+			ids.push($(this).attr('disc_id'));
+		});
+		return ids;
+	}
+
+	// ================== فعال/غیرفعال تکی ==================
 
 	$(document).on('click', '.toggle_disc_status', function () {
 		if ($(this).data('no-permission')) { alert('شما دسترسی این عملیات را ندارید'); return; }
@@ -149,6 +165,38 @@
 				});
 			}
 		});
+	});
+
+	// ================== فعال/غیرفعال گروهی ==================
+
+	function toggleSelected(status) {
+		var ids = getSelectedIds();
+		if (ids.length === 0) { alert('هیچ ردیفی انتخاب نشده است'); return; }
+
+		var requests = ids.map(function (id) {
+			return $.ajax({
+				url: "<?= base_url('admin/toggle_discount_status') ?>",
+				method: "POST",
+				data: { id: id, status: status },
+				dataType: 'json'
+			});
+		});
+
+		$.when.apply($, requests).always(function () {
+			$('#disc_data').DataTable().ajax.reload(null, false);
+			showSnackbar('snackbar');
+		});
+	}
+
+	$('#active_selected').on('click', function () { toggleSelected(1); });
+	$('#deactive_selected').on('click', function () { toggleSelected(0); });
+
+	// ================== ویرایش همه (فعلاً بدون فانکشن) ==================
+
+	$('#update_selected').on('click', function () {
+		var ids = getSelectedIds();
+		if (ids.length === 0) { alert('هیچ ردیفی انتخاب نشده است'); return; }
+		// TODO: پیاده‌سازی ویرایش گروهی بعداً اضافه می‌شه
 	});
 
 	// ================== حذف ==================
@@ -177,10 +225,7 @@
 	});
 
 	$('#delete_selected').on('click', function () {
-		var ids = [];
-		$("input[name='row-check']:checked").each(function () {
-			ids.push($(this).attr('disc_id'));
-		});
+		var ids = getSelectedIds();
 		if (ids.length === 0) { alert('هیچ ردیفی انتخاب نشده است'); return; }
 		deleteDiscounts(ids);
 	});

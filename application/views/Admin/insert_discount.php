@@ -35,7 +35,6 @@
 							<input readonly id="start_date" name="start_date"
 								   class="form-control" placeholder="تاریخ شروع"
 								   value="<?php echo set_value('start_date'); ?>"><br>
-							<!-- ✅ تاریخ میلادی برای ذخیره در DB -->
 							<input hidden id="datetime1" name="datetime1">
 						</div>
 
@@ -45,7 +44,6 @@
 							<input readonly id="end_date" name="end_date"
 								   class="form-control" placeholder="تاریخ پایان"
 								   value="<?php echo set_value('end_date'); ?>"><br>
-							<!-- ✅ تاریخ میلادی برای ذخیره در DB -->
 							<input hidden id="datetime2" name="datetime2">
 						</div>
 						<br><br>
@@ -77,9 +75,31 @@
 							<label style="color: white; line-height: 26px; position: absolute; margin-right: 10px;">محصولات:</label>
 							<br>
 							<select multiple class="form-control products" id="products" name="products[]">
-								<?php foreach ($products as $p):
-									$label = $p->name . ' - ' . number_format($p->price ?? 0) . ' تومان';?>
-									<option value="<?php echo $p->id; ?>" <?= set_select('products', $p->id, false) ?>>
+								<?php
+								// ✅ lookup map ها برای نمایش مدل/جنس/سایز/برند/رنگ (مثل فاکتور دستی)
+								$model_map = $jens_map = $size_map = $brand_map = $color_map = [];
+								foreach ($model as $r) { $model_map[$r->id] = $r->name; }
+								foreach ($jens  as $r) { $jens_map[$r->id]  = $r->name; }
+								foreach ($size  as $r) { $size_map[$r->id]  = $r->name; }
+								foreach ($brand as $r) { $brand_map[$r->id] = $r->name; }
+								foreach ($color as $r) { $color_map[$r->id] = $r->name; }
+
+								foreach ($products as $p):
+									$label = $p->name . ' - ' . number_format($p->price ?? 0) . ' تومان';
+
+									$attrs = [];
+									if (!empty($p->model) && isset($model_map[$p->model])) $attrs[] = 'مدل:' . $model_map[$p->model];
+									if (!empty($p->jens)  && isset($jens_map[$p->jens]))   $attrs[] = 'جنس:' . $jens_map[$p->jens];
+									if (!empty($p->size)  && isset($size_map[$p->size]))   $attrs[] = 'سایز:' . $size_map[$p->size];
+									if (!empty($p->brand) && isset($brand_map[$p->brand])) $attrs[] = 'برند:' . $brand_map[$p->brand];
+									if (!empty($p->color) && isset($color_map[$p->color])) $attrs[] = 'رنگ:' . $color_map[$p->color];
+									if (!empty($attrs)) $label .= ' (' . implode(' ', $attrs) . ')';
+
+									// ✅ برچسب غیرفعال
+									if (empty($p->isActive)) $label .= ' — غیرفعال';
+									?>
+									<option value="<?php echo $p->id; ?>" <?= set_select('products', $p->id, false) ?>
+										<?= empty($p->isActive) ? 'style="color:#999;"' : '' ?>>
 										<?php echo htmlspecialchars($label); ?>
 									</option>
 								<?php endforeach; ?>
@@ -98,7 +118,6 @@
 							<br>
 							<select multiple class="form-control users" id="users" name="users[]">
 								<?php
-								// ✅ lookup map پروفایل برای جلوگیری از N+1
 								$profile_map = [];
 								foreach ($profiles as $prof) {
 									$profile_map[$prof->user_id] = $prof;
@@ -141,28 +160,18 @@
 		altField: '#end_date',
 		altFormat: 'LLLL',
 		initialValue: false,
-		timePicker: {
-			enabled: true,
-			meridiem: { enabled: true }
-		},
-		navigator: {
-			scroll: { enabled: false },
-			text: { btnNextText: 'بعدی', btnPrevText: 'قبلی' }
-		},
+		timePicker: { enabled: true, meridiem: { enabled: true } },
+		navigator: { scroll: { enabled: false }, text: { btnNextText: 'بعدی', btnPrevText: 'قبلی' } },
 		onSelect: function (unix) {
 			const state = to.getState();
 			var dt = new Date(state.view.unixDate);
-
-			// ✅ فرمت Y-m-d H:i:s با zero-padding برای ذخیره صحیح در DB
-			var year   = dt.getUTCFullYear();
-			var month  = String(dt.getUTCMonth() + 1).padStart(2, '0');
-			var day    = String(dt.getUTCDate()).padStart(2, '0');
-			var hour   = String(dt.getHours()).padStart(2, '0');
+			var year = dt.getUTCFullYear();
+			var month = String(dt.getUTCMonth() + 1).padStart(2, '0');
+			var day = String(dt.getUTCDate()).padStart(2, '0');
+			var hour = String(dt.getHours()).padStart(2, '0');
 			var minute = String(dt.getMinutes()).padStart(2, '0');
 			var second = String(dt.getSeconds()).padStart(2, '0');
-
 			$('#datetime2').val(year + '-' + month + '-' + day + ' ' + hour + ':' + minute + ':' + second);
-
 			to.touched = true;
 			if (from && from.options && from.options.maxDate != unix) {
 				var cachedValue = from.getState().selected.unixDate;
@@ -177,28 +186,18 @@
 		altField: '#start_date',
 		altFormat: 'LLLL',
 		initialValue: false,
-		timePicker: {
-			enabled: true,
-			meridiem: { enabled: true }
-		},
-		navigator: {
-			scroll: { enabled: false },
-			text: { btnNextText: 'بعدی', btnPrevText: 'قبلی' }
-		},
+		timePicker: { enabled: true, meridiem: { enabled: true } },
+		navigator: { scroll: { enabled: false }, text: { btnNextText: 'بعدی', btnPrevText: 'قبلی' } },
 		onSelect: function (unix) {
 			const state = from.getState();
 			var dt = new Date(state.view.unixDate);
-
-			// ✅ فرمت Y-m-d H:i:s با zero-padding
-			var year   = dt.getUTCFullYear();
-			var month  = String(dt.getUTCMonth() + 1).padStart(2, '0');
-			var day    = String(dt.getUTCDate()).padStart(2, '0');
-			var hour   = String(dt.getHours()).padStart(2, '0');
+			var year = dt.getUTCFullYear();
+			var month = String(dt.getUTCMonth() + 1).padStart(2, '0');
+			var day = String(dt.getUTCDate()).padStart(2, '0');
+			var hour = String(dt.getHours()).padStart(2, '0');
 			var minute = String(dt.getMinutes()).padStart(2, '0');
 			var second = String(dt.getSeconds()).padStart(2, '0');
-
 			$('#datetime1').val(year + '-' + month + '-' + day + ' ' + hour + ':' + minute + ':' + second);
-
 			from.touched = true;
 			if (to && to.options && to.options.minDate != unix) {
 				var cachedValue = to.getState().selected.unixDate;
@@ -214,13 +213,8 @@
 		$("#code").val(x);
 	});
 
-	$('#limit_p').click(function () {
-		$(".p_div").toggle();
-	});
-
-	$('#limit_u').click(function () {
-		$(".u_div").toggle();
-	});
+	$('#limit_p').click(function () { $(".p_div").toggle(); });
+	$('#limit_u').click(function () { $(".u_div").toggle(); });
 
 	$(document).ready(function () {
 
@@ -233,9 +227,8 @@
 			closeOnSelect: false,
 		});
 
-		// ✅ تولید خودکار کد تخفیف
 		function rand_code(length) {
-			var result     = '';
+			var result = '';
 			var characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 			for (var i = 0; i < length; i++) {
 				result += characters.charAt(Math.floor(Math.random() * characters.length));
@@ -251,13 +244,11 @@
 			}
 		});
 
-		// ✅ چک تکراری بودن کد (real-time)
 		$('#code').keyup(function () {
 			if ($("#code_error").is(':visible')) { $("#code_error").hide(); }
 
 			var code = $(this).val();
 			if (code !== '') {
-				// جستجو در dropdown
 				$.ajax({
 					url: "<?php echo base_url(); ?>admin/search_code",
 					method: "POST",
@@ -268,14 +259,11 @@
 					}
 				});
 
-				// ✅ چک تکراری با endpoint جدید
 				$.ajax({
 					url: "<?php echo base_url(); ?>admin/check_discount_code",
 					method: "POST",
 					data: { code: code },
-					success: function (data) {
-						$('#email_result').html(data);
-					}
+					success: function (data) { $('#email_result').html(data); }
 				});
 			} else {
 				$('#dp_code').hide();

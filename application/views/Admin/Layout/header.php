@@ -156,7 +156,9 @@
 		-mox-text-security:disc;
 	}
 
-	#per_data,#inv_sup_data,#inv_attr_data,#inv_data,#attr_data,#ord_data
+	#per_data,#stock_data,#trans_data
+	,#pstock_data
+	,#inv_data,#attr_data,#ord_data
 	,#prd_data,#cmnt_data,#disc_data, #usr_data
 	,#size_data,#cat_data {
 		font-size: 12px;

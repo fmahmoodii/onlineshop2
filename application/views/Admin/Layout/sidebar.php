@@ -55,9 +55,8 @@
             align-items: center;justify-content: center;
             border: 1px solid #4e4e4e;position: relative;left: 40px;">انبارداری</li></a>
 				<ul id="list2" class="ul2">
-					<a href="<?php echo base_url()?>admin/inventory_attrs"><li>انبار</li></a>
 					<a href="<?php echo base_url()?>admin/inventory"><li>لیست انبار</li></a>
-					<a href="<?php echo base_url()?>admin/attributes"><li>لیست موجودی</li></a>
+					<a href="<?php echo base_url()?>admin/product_stock"><li>لیست موجودی</li></a>
 				</ul>
 				<a href="<?php echo base_url()?>admin/rules"><li id="rules" >قوانین و مقررات</li></a>
 				<a href="<?php echo base_url()?>admin/footer"><li id="footer" >فوتر</li></a>

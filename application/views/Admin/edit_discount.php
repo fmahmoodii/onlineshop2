@@ -37,7 +37,6 @@
 						<div class="form-group start_date" data-date="<?php echo $disc->start_date; ?>" style="display: inline-block; width: 270px">
 							<label for="start_date" class="required">تاریخ شروع:</label><br>
 							<input readonly id="start_date" name="start_date" class="form-control" placeholder="تاریخ شروع"><br>
-							<!-- ✅ تاریخ میلادی با فرمت Y-m-d H:i:s برای DB -->
 							<input hidden id="datetime1" name="datetime1" value="<?php echo $disc->start_date; ?>">
 							<?php echo form_error('start_date','<span style="color: red">','</span>') ?>
 						</div>
@@ -45,7 +44,6 @@
 						<div class="form-group end_date" data-date="<?php echo $disc->end_date; ?>" style="display: inline-block; width: 270px">
 							<label for="end_date" class="required">تاریخ پایان:</label><br>
 							<input readonly id="end_date" name="end_date" class="form-control" placeholder="تاریخ پایان"><br>
-							<!-- ✅ تاریخ میلادی با فرمت Y-m-d H:i:s برای DB -->
 							<input hidden id="datetime2" name="datetime2" value="<?php echo $disc->end_date; ?>">
 							<?php echo form_error('end_date','<span style="color: red">','</span>') ?>
 						</div>
@@ -79,13 +77,34 @@
 							<label style="color: white; line-height: 26px; position: absolute; margin-right: 10px;">محصولات:</label>
 							<br>
 							<select multiple class="form-control products" id="products" name="products[]">
-								<?php foreach ($products as $p): ?>
+								<?php
+								// ✅ lookup map ها برای نمایش مدل/جنس/سایز/برند/رنگ (مثل فاکتور دستی)
+								$model_map = $jens_map = $size_map = $brand_map = $color_map = [];
+								foreach ($model as $r) { $model_map[$r->id] = $r->name; }
+								foreach ($jens  as $r) { $jens_map[$r->id]  = $r->name; }
+								foreach ($size  as $r) { $size_map[$r->id]  = $r->name; }
+								foreach ($brand as $r) { $brand_map[$r->id] = $r->name; }
+								foreach ($color as $r) { $color_map[$r->id] = $r->name; }
+
+								foreach ($products as $p):
+									$label = $p->name;
+									if (isset($p->price)) $label .= ' - ' . number_format($p->price) . ' تومان';
+
+									$attrs = [];
+									if (!empty($p->model) && isset($model_map[$p->model])) $attrs[] = 'مدل:' . $model_map[$p->model];
+									if (!empty($p->jens)  && isset($jens_map[$p->jens]))   $attrs[] = 'جنس:' . $jens_map[$p->jens];
+									if (!empty($p->size)  && isset($size_map[$p->size]))   $attrs[] = 'سایز:' . $size_map[$p->size];
+									if (!empty($p->brand) && isset($brand_map[$p->brand])) $attrs[] = 'برند:' . $brand_map[$p->brand];
+									if (!empty($p->color) && isset($color_map[$p->color])) $attrs[] = 'رنگ:' . $color_map[$p->color];
+									if (!empty($attrs)) $label .= ' (' . implode(' ', $attrs) . ')';
+
+									// ✅ برچسب غیرفعال
+									if (empty($p->isActive)) $label .= ' — غیرفعال';
+									?>
 									<option value="<?php echo $p->id; ?>"
-										<?php foreach($discount_products as $disc_p){ if($disc_p->product_id == $p->id){ echo 'selected'; break; } } ?>>
-										<?php echo htmlspecialchars($p->name); ?>
-										<?php if(isset($p->price)): ?>
-											- <?php echo number_format($p->price); ?> تومان
-										<?php endif; ?>
+										<?php foreach($discount_products as $disc_p){ if($disc_p->product_id == $p->id){ echo 'selected'; break; } } ?>
+										<?= empty($p->isActive) ? 'style="color:#999;"' : '' ?>>
+										<?php echo htmlspecialchars($label); ?>
 									</option>
 								<?php endforeach; ?>
 							</select>
@@ -103,7 +122,6 @@
 							<br>
 							<select multiple class="form-control users" id="users" name="users[]">
 								<?php
-								// ✅ lookup map پروفایل برای جلوگیری از N+1
 								$profile_map = [];
 								foreach ($profiles as $prof) {
 									$profile_map[$prof->user_id] = $prof;
@@ -148,28 +166,18 @@
 		altField: '#end_date',
 		altFormat: 'LLLL',
 		initialValue: true,
-		timePicker: {
-			enabled: true,
-			meridiem: { enabled: true }
-		},
-		navigator: {
-			scroll: { enabled: false },
-			text: { btnNextText: 'بعدی', btnPrevText: 'قبلی' }
-		},
+		timePicker: { enabled: true, meridiem: { enabled: true } },
+		navigator: { scroll: { enabled: false }, text: { btnNextText: 'بعدی', btnPrevText: 'قبلی' } },
 		onSelect: function (unix) {
 			const state = to.getState();
 			var dt = new Date(state.view.unixDate);
-
-			// ✅ فرمت Y-m-d H:i:s با zero-padding
-			var year   = dt.getUTCFullYear();
-			var month  = String(dt.getUTCMonth() + 1).padStart(2, '0');
-			var day    = String(dt.getUTCDate()).padStart(2, '0');
-			var hour   = String(dt.getHours()).padStart(2, '0');
+			var year = dt.getUTCFullYear();
+			var month = String(dt.getUTCMonth() + 1).padStart(2, '0');
+			var day = String(dt.getUTCDate()).padStart(2, '0');
+			var hour = String(dt.getHours()).padStart(2, '0');
 			var minute = String(dt.getMinutes()).padStart(2, '0');
 			var second = String(dt.getSeconds()).padStart(2, '0');
-
 			$('#datetime2').val(year + '-' + month + '-' + day + ' ' + hour + ':' + minute + ':' + second);
-
 			to.touched = true;
 			if (from && from.options && from.options.maxDate != unix) {
 				var cachedValue = from.getState().selected.unixDate;
@@ -184,28 +192,18 @@
 		altField: '#start_date',
 		altFormat: 'LLLL',
 		initialValue: true,
-		timePicker: {
-			enabled: true,
-			meridiem: { enabled: true }
-		},
-		navigator: {
-			scroll: { enabled: false },
-			text: { btnNextText: 'بعدی', btnPrevText: 'قبلی' }
-		},
+		timePicker: { enabled: true, meridiem: { enabled: true } },
+		navigator: { scroll: { enabled: false }, text: { btnNextText: 'بعدی', btnPrevText: 'قبلی' } },
 		onSelect: function (unix) {
 			const state = from.getState();
 			var dt = new Date(state.view.unixDate);
-
-			// ✅ فرمت Y-m-d H:i:s با zero-padding
-			var year   = dt.getUTCFullYear();
-			var month  = String(dt.getUTCMonth() + 1).padStart(2, '0');
-			var day    = String(dt.getUTCDate()).padStart(2, '0');
-			var hour   = String(dt.getHours()).padStart(2, '0');
+			var year = dt.getUTCFullYear();
+			var month = String(dt.getUTCMonth() + 1).padStart(2, '0');
+			var day = String(dt.getUTCDate()).padStart(2, '0');
+			var hour = String(dt.getHours()).padStart(2, '0');
 			var minute = String(dt.getMinutes()).padStart(2, '0');
 			var second = String(dt.getSeconds()).padStart(2, '0');
-
 			$('#datetime1').val(year + '-' + month + '-' + day + ' ' + hour + ':' + minute + ':' + second);
-
 			from.touched = true;
 			if (to && to.options && to.options.minDate != unix) {
 				var cachedValue = to.getState().selected.unixDate;
@@ -256,7 +254,6 @@
 
 	$(document).ready(function () {
 
-		// ✅ نمایش/مخفی بر اساس انتخاب فعلی
 		if ($('.products').val() == '' || $('.products').val() === null) {
 			$('.p_div').hide();
 		} else {
@@ -289,7 +286,6 @@
 			var id_off = $('#id').val();
 
 			if (code !== '') {
-				// جستجو dropdown
 				$.ajax({
 					url: "<?php echo base_url(); ?>admin/search_code",
 					method: "POST",
@@ -300,7 +296,6 @@
 					}
 				});
 
-				// ✅ چک تکراری موقع ویرایش (به جز خودش)
 				$.ajax({
 					url: "<?php echo base_url(); ?>admin/check_discount_code_edit",
 					method: "POST",
